@@ -1,0 +1,19 @@
+-- Q6, duckdb_strong_rels: maximum (O_Accepted.time - O_Created.time) across
+-- Offers. ocel_time still requires event_<activity> joins; object/event
+-- type checks move onto the event_object view's constant projections.
+SELECT MAX(duration_seconds)
+FROM (
+    SELECT E2.ocel_time - E1.ocel_time AS duration_seconds
+    FROM
+        event_object AS E2O
+        INNER JOIN event_O_Created AS E1
+            ON E2O.ocel_event_id = E1.ocel_id
+        INNER JOIN event_object AS E2O2
+            ON E2O2.ocel_object_id = E2O.ocel_object_id
+            AND E2O2.ocel_object_type = 'Offer'
+            AND E2O2.ocel_event_type = 'O_Accepted'
+        INNER JOIN event_O_Accepted AS E2
+            ON E2O2.ocel_event_id = E2.ocel_id
+    WHERE E2O.ocel_object_type = 'Offer'
+      AND E2O.ocel_event_type = 'O_Created'
+);

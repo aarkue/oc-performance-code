@@ -1,0 +1,32 @@
+WITH CreatedOffers AS (
+    SELECT
+        O2O.ocel_source_id AS app_oid,
+        A3.case_r_id AS co_case_r_id,
+        E2.created_id AS co_created_id
+    FROM
+        object_object AS O2O
+        INNER JOIN (SELECT ocel_id AS offer_id FROM object_Offer) AS A2
+            ON O2O.ocel_target_id = A2.offer_id
+        INNER JOIN event_object AS E2O2 ON E2O2.ocel_object_id = A2.offer_id
+        INNER JOIN (SELECT ocel_id AS created_id, ocel_time AS created_time FROM event_O_Created) AS E2
+            ON E2O2.ocel_event_id = E2.created_id
+        INNER JOIN event_object AS E2O3 ON E2O3.ocel_event_id = E2.created_id
+        INNER JOIN (SELECT ocel_id AS case_r_id FROM object_Case_R) AS A3
+            ON E2O3.ocel_object_id = A3.case_r_id
+)
+SELECT
+    A1.app_id AS application_id,
+    A2.case_r_id AS case_r_id_out,
+    E1.acc_id AS event_id,
+    MIN(CASE WHEN CO.co_case_r_id = A2.case_r_id THEN 1 ELSE 0 END) AS satisfied
+FROM
+    (SELECT ocel_id AS app_id FROM object_Application) AS A1
+    INNER JOIN event_object AS E2O ON E2O.ocel_object_id = A1.app_id
+    INNER JOIN (SELECT ocel_id AS acc_id, ocel_time AS acc_time FROM event_A_Accepted) AS E1
+        ON E2O.ocel_event_id = E1.acc_id
+    INNER JOIN event_object AS E2O2 ON E2O2.ocel_event_id = E1.acc_id
+    INNER JOIN (SELECT ocel_id AS case_r_id FROM object_Case_R) AS A2
+        ON E2O2.ocel_object_id = A2.case_r_id
+    INNER JOIN CreatedOffers AS CO ON CO.app_oid = A1.app_id
+GROUP BY
+    A1.app_id, A2.case_r_id, E1.acc_id

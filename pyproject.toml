@@ -1,0 +1,43 @@
+[project]
+name = "ocpm-bench"
+version = "0.0.1"
+description = "Benchmark harness for object-centric process-mining data-access patterns"
+# Pinned to 3.14 to match the maturin-built r4pm wheel (cpython-314 ABI).
+# A .python-version file pins the venv to the same.
+requires-python = ">=3.14"
+dependencies = [
+    "click>=8.1",
+    "pyyaml>=6.0",
+    "polars>=1.0",
+    "pandas>=2.0",
+    # PandasModel goes through polars.DataFrame.to_pandas(), which
+    # requires pyarrow at runtime.
+    "pyarrow>=15",
+    "duckdb>=1.0",
+    "kuzu>=0.6",
+    # r4pm must be built from source (custom build with OCPQ support;
+    #   the public PyPI release does not include OCPQ). See the paper
+    #   repository for build instructions.
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "plotly>=5.0",
+    "kaleido",  # static image export for plotly
+]
+
+[project.scripts]
+ocpm-bench = "ocpm_bench.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ocpm_bench*"]
+
+[tool.setuptools.package-data]
+"ocpm_bench.patterns.ocpq" = ["corpus/Q*/*.txt", "corpus/Q*/ocpq-tree.json"]
+

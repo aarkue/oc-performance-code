@@ -1,0 +1,15 @@
+# DFG via PrimitiveAccess (same Python code on every model) on BPIC17.
+
+repetitions: 2
+matrix_passes: 1
+randomize_cell_order: false
+cell_timeout_seconds: 3600
+results_path: results/dfg_prim-small.jsonl
+
+cells:
+  - { model: linked_ocel, pattern: dfg_prim, dataset: bpic17 }
+  # - { model: sqlite_mem, pattern: dfg_prim, dataset: bpic17 }
+  - { model: duckdb, pattern: dfg_prim, dataset: bpic17 }
+  - { model: kuzu, pattern: dfg_prim, dataset: bpic17 }
+  - { model: polars, pattern: dfg_prim, dataset: bpic17 }
+  # - { model: pandas, pattern: dfg_prim, dataset: bpic17 }

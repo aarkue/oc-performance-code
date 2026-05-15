@@ -1,0 +1,14 @@
+# Small-scale DFG run on BPIC17.
+
+repetitions: 1
+matrix_passes: 1
+randomize_cell_order: false
+results_path: results/dfg-small.jsonl
+
+cells:
+  - { model: linked_ocel, pattern: dfg, dataset: bpic17 }
+  # - { model: sqlite_mem, pattern: dfg, dataset: bpic17 }
+  - { model: duckdb, pattern: dfg, dataset: bpic17 }
+  - { model: kuzu, pattern: dfg, dataset: bpic17 }
+  - { model: polars, pattern: dfg, dataset: bpic17 }
+  - { model: pandas, pattern: dfg, dataset: bpic17 }

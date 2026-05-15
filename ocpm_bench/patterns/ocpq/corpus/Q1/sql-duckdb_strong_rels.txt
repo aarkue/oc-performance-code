@@ -1,0 +1,17 @@
+-- Q1, duckdb_strong_rels: count A_Submitted events per Application.
+-- Filters live on the event_object view's constant projections so DuckDB
+-- prunes the UNION ALL branches at plan time instead of running the
+-- JOIN-on-type pattern from the OCEL 2.0 corpus SQL.
+SELECT *
+FROM (
+    SELECT DISTINCT
+        A1.ocel_id,
+        COUNT(E2O.ocel_event_id) <> 1
+    FROM
+        object_Application AS A1
+        LEFT JOIN event_object AS E2O
+            ON E2O.ocel_object_id = A1.ocel_id
+            AND E2O.ocel_object_type = 'Application'
+            AND E2O.ocel_event_type = 'A_Submitted'
+    GROUP BY A1.ocel_id
+)

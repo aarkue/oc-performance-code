@@ -1,0 +1,76 @@
+{
+  "nodes": [
+    {
+      "Box": [
+        {
+          "newEventVars": {},
+          "newObjectVars": {},
+          "filters": [],
+          "sizeFilters": [],
+          "constraints": [],
+          "evVarLabels": {},
+          "obVarLabels": {},
+          "labels": [
+            {
+              "label": "max_dur",
+              "cel": "string(max(A.map(b,b['e2'].time() - b['e1'].time())))"
+            }
+          ]
+        },
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "Box": [
+        {
+          "newEventVars": {
+            "1": [
+              "O_Accepted"
+            ],
+            "0": [
+              "O_Created"
+            ]
+          },
+          "newObjectVars": {
+            "0": [
+              "Offer"
+            ]
+          },
+          "filters": [
+            {
+              "type": "O2E",
+              "object": 0,
+              "event": 0,
+              "qualifier": null,
+              "filterLabel": null
+            },
+            {
+              "type": "O2E",
+              "object": 0,
+              "event": 1,
+              "qualifier": null,
+              "filterLabel": null
+            }
+          ],
+          "sizeFilters": [],
+          "constraints": [],
+          "evVarLabels": {},
+          "obVarLabels": {},
+          "labels": []
+        },
+        []
+      ]
+    }
+  ],
+  "edgeNames": [
+    [
+      [
+        0,
+        1
+      ],
+      "A"
+    ]
+  ]
+}

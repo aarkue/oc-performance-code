@@ -1,0 +1,15 @@
+SELECT
+    E1.ocel_id,
+    (
+        SELECT
+            COUNT(*)
+        FROM
+            event_object AS E2O
+            INNER JOIN object_Offer AS A1 ON E2O.ocel_object_id = A1.ocel_id
+        WHERE
+            E2O.ocel_event_id = E1.ocel_id
+    ) = 1 as satisfied
+FROM
+    event_O_Returned AS E1
+GROUP BY
+    E1.ocel_id

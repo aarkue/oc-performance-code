@@ -1,0 +1,14 @@
+# DFG paper matrix on BPIC17.
+
+repetitions: 10
+matrix_passes: 2
+randomize_cell_order: true
+results_path: results/dfg-paper.jsonl
+
+cells:
+  - { model: linked_ocel, pattern: dfg, dataset: bpic17 }
+  - { model: sqlite_mem, pattern: dfg, dataset: bpic17 }
+  - { model: duckdb, pattern: dfg, dataset: bpic17 }
+  - { model: kuzu, pattern: dfg, dataset: bpic17 }
+  - { model: polars, pattern: dfg, dataset: bpic17 }
+  - { model: pandas, pattern: dfg, dataset: bpic17 }

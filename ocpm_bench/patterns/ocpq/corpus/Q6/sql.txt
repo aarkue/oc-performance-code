@@ -1,0 +1,13 @@
+SELECT
+    MAX(duration_seconds)
+from
+    (
+        SELECT
+            E2.ocel_time - E1.ocel_time AS duration_seconds
+        FROM
+            event_object AS E2O
+            INNER JOIN object_Offer AS A1 ON E2O.ocel_object_id = A1.ocel_id
+            INNER JOIN event_O_Created AS E1 ON E2O.ocel_event_id = E1.ocel_id
+            INNER JOIN event_object AS E2O2 ON E2O2.ocel_object_id = A1.ocel_id
+            INNER JOIN event_O_Accepted AS E2 ON E2O2.ocel_event_id = E2.ocel_id
+    );

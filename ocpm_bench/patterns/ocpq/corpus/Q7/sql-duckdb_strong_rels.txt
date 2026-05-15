@@ -1,0 +1,28 @@
+-- Q7, duckdb_strong_rels: every (Application, Offer A2, Offer A3, O_Created
+-- E2, O_Created E3) tuple where both offers are O2O-linked to A1. The
+-- corpus query has eight JOINs; four become view filters on the strong-rels
+-- schema (no separate JOINs to object_Offer or event_O_Created needed).
+SELECT
+    A1.ocel_id              AS application_id,
+    EO2.ocel_object_id      AS offer_2_id,
+    EO3.ocel_object_id      AS offer_3_id,
+    EO2.ocel_event_id       AS created_event_2_id,
+    EO3.ocel_event_id       AS created_event_3_id
+FROM
+    object_Application AS A1
+    INNER JOIN object_object AS OO1
+        ON OO1.ocel_source_id = A1.ocel_id
+        AND OO1.ocel_source_type = 'Application'
+        AND OO1.ocel_target_type = 'Offer'
+    INNER JOIN event_object AS EO2
+        ON EO2.ocel_object_id = OO1.ocel_target_id
+        AND EO2.ocel_object_type = 'Offer'
+        AND EO2.ocel_event_type = 'O_Created'
+    INNER JOIN object_object AS OO2
+        ON OO2.ocel_source_id = A1.ocel_id
+        AND OO2.ocel_source_type = 'Application'
+        AND OO2.ocel_target_type = 'Offer'
+    INNER JOIN event_object AS EO3
+        ON EO3.ocel_object_id = OO2.ocel_target_id
+        AND EO3.ocel_object_type = 'Offer'
+        AND EO3.ocel_event_type = 'O_Created'

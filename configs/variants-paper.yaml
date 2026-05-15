@@ -1,0 +1,14 @@
+# Trace-variants paper matrix on BPIC17. Wall clock: ~15 min.
+
+repetitions: 10
+matrix_passes: 1
+randomize_cell_order: true
+results_path: results/variants-paper.jsonl
+
+cells:
+  - { model: linked_ocel, pattern: variants, dataset: bpic17 }
+  - { model: sqlite_mem, pattern: variants, dataset: bpic17 }
+  - { model: duckdb, pattern: variants, dataset: bpic17 }
+  - { model: kuzu, pattern: variants, dataset: bpic17 }
+  - { model: polars, pattern: variants, dataset: bpic17 }
+  - { model: pandas, pattern: variants, dataset: bpic17 }

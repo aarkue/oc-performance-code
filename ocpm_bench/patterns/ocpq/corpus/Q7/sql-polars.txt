@@ -1,0 +1,20 @@
+SELECT
+    A1.app_id AS application_id,
+    A2.offer_a_id AS offer_2_id,
+    A3.offer_b_id AS offer_3_id,
+    E2.created_a_id AS created_event_2_id,
+    E3.created_b_id AS created_event_3_id
+FROM
+    (SELECT ocel_id AS app_id FROM object_Application) AS A1
+    INNER JOIN object_object AS OO1 ON A1.app_id = OO1.ocel_source_id
+    INNER JOIN (SELECT ocel_id AS offer_a_id FROM object_Offer) AS A2
+        ON OO1.ocel_target_id = A2.offer_a_id
+    INNER JOIN event_object AS EO2 ON EO2.ocel_object_id = A2.offer_a_id
+    INNER JOIN (SELECT ocel_id AS created_a_id FROM event_O_Created) AS E2
+        ON EO2.ocel_event_id = E2.created_a_id
+    INNER JOIN object_object AS OO2 ON A1.app_id = OO2.ocel_source_id
+    INNER JOIN (SELECT ocel_id AS offer_b_id FROM object_Offer) AS A3
+        ON OO2.ocel_target_id = A3.offer_b_id
+    INNER JOIN event_object AS EO3 ON EO3.ocel_object_id = A3.offer_b_id
+    INNER JOIN (SELECT ocel_id AS created_b_id FROM event_O_Created) AS E3
+        ON EO3.ocel_event_id = E3.created_b_id

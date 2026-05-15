@@ -1,0 +1,15 @@
+# OCPQ paper matrix.
+
+repetitions: 10
+matrix_passes: 1
+randomize_cell_order: true
+cell_timeout_seconds: 14400   # 4 hours per cell
+results_path: results/ocpq-paper.jsonl
+
+cells:
+  - { model: linked_ocel, pattern: ocpq, dataset: bpic17 }
+  - { model: sqlite_mem, pattern: ocpq, dataset: bpic17 }
+  - { model: duckdb, pattern: ocpq, dataset: bpic17 }
+  - { model: kuzu, pattern: ocpq, dataset: bpic17 }
+  - { model: polars, pattern: ocpq, dataset: bpic17 }
+  - { model: pandas, pattern: ocpq, dataset: bpic17 }

@@ -1,0 +1,13 @@
+-- Q3, duckdb_strong_rels: for each O_Returned event, is exactly one Offer
+-- linked to it? Drops the JOIN to object_Offer, replacing with a filter on
+-- the event_object view's ocel_object_type constant projection.
+SELECT
+    E1.ocel_id,
+    (
+        SELECT COUNT(*)
+        FROM event_object AS E2O
+        WHERE E2O.ocel_event_id = E1.ocel_id
+          AND E2O.ocel_object_type = 'Offer'
+    ) = 1 AS satisfied
+FROM event_O_Returned AS E1
+GROUP BY E1.ocel_id

@@ -1,0 +1,15 @@
+# Trace variants via PrimitiveAccess (same Python code on every model) on BPIC17.
+
+repetitions: 5
+matrix_passes: 1
+randomize_cell_order: true
+cell_timeout_seconds: 14400
+results_path: results/variants_prim-paper.jsonl
+
+cells:
+  - { model: linked_ocel, pattern: variants_prim, dataset: bpic17 }
+  - { model: sqlite_mem, pattern: variants_prim, dataset: bpic17 }
+  - { model: duckdb, pattern: variants_prim, dataset: bpic17 }
+  - { model: kuzu, pattern: variants_prim, dataset: bpic17 }
+  - { model: polars, pattern: variants_prim, dataset: bpic17 }
+  - { model: pandas, pattern: variants_prim, dataset: bpic17 }

@@ -1,0 +1,37 @@
+-- Q5, duckdb_strong_rels: for each (Application, Case_R, A_Accepted event),
+-- do all O2O-linked created offers share the same Case_R? No ocel_time
+-- required, so all object/event-type checks fold into view filters.
+WITH CreatedOffers AS (
+    SELECT
+        O2O.ocel_source_id,
+        E2O3.ocel_object_id AS caseR,
+        E2O2.ocel_event_id
+    FROM
+        object_object AS O2O
+        INNER JOIN event_object AS E2O2
+            ON E2O2.ocel_object_id = O2O.ocel_target_id
+            AND E2O2.ocel_object_type = 'Offer'
+            AND E2O2.ocel_event_type = 'O_Created'
+        INNER JOIN event_object AS E2O3
+            ON E2O3.ocel_event_id = E2O2.ocel_event_id
+            AND E2O3.ocel_object_type = 'Case_R'
+    WHERE O2O.ocel_source_type = 'Application'
+      AND O2O.ocel_target_type = 'Offer'
+)
+SELECT DISTINCT
+    A1.ocel_id,
+    E2O2.ocel_object_id AS a2_id,
+    E2O.ocel_event_id AS e1_id,
+    MIN(CO.caseR = E2O2.ocel_object_id) AS satisfied
+FROM
+    object_Application AS A1
+    INNER JOIN event_object AS E2O
+        ON E2O.ocel_object_id = A1.ocel_id
+        AND E2O.ocel_object_type = 'Application'
+        AND E2O.ocel_event_type = 'A_Accepted'
+    INNER JOIN event_object AS E2O2
+        ON E2O2.ocel_event_id = E2O.ocel_event_id
+        AND E2O2.ocel_object_type = 'Case_R'
+    INNER JOIN CreatedOffers AS CO
+        ON CO.ocel_source_id = A1.ocel_id
+GROUP BY A1.ocel_id, E2O2.ocel_object_id, E2O.ocel_event_id

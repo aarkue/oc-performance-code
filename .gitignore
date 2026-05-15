@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Project data (fetched via scripts, not committed)
+data/
+cache/
+
+# Benchmark results (large, per-machine)
+results/*.jsonl
+results/*.jsonl-old
+results/*.png
+results/*.pdf
+results/oracles/
+
+# Generated tiny example OCEL (rebuilt by tests/example/build_example.py)
+tests/example/tiny.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / local tooling state
+.idea/
+.vscode/
+.claude/
+*.swp
+*~
+
+# Secrets
+.env
+.env.local

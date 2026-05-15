@@ -1,0 +1,19 @@
+-- Q2, duckdb_strong_rels: for each (Offer, O_Created event) pair, has the
+-- offer ever had an O_Returned event linked? Filters live on event_object
+-- view constant projections so DuckDB prunes UNION branches.
+SELECT
+    A1.ocel_id AS offer_id,
+    E2O.ocel_event_id AS created_event_id,
+    (
+        SELECT COUNT(*)
+        FROM event_object AS XE2O
+        WHERE XE2O.ocel_object_id = A1.ocel_id
+          AND XE2O.ocel_object_type = 'Offer'
+          AND XE2O.ocel_event_type = 'O_Returned'
+    ) >= 1 AS satisfied
+FROM
+    object_Offer AS A1
+    INNER JOIN event_object AS E2O
+        ON E2O.ocel_object_id = A1.ocel_id
+        AND E2O.ocel_object_type = 'Offer'
+        AND E2O.ocel_event_type = 'O_Created'

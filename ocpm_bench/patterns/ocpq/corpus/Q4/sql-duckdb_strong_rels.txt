@@ -1,0 +1,37 @@
+-- Q4, duckdb_strong_rels: for each (Application, A_Accepted event), is there
+-- an O2O-linked Offer with an O_Accepted event no earlier than E1.time?
+-- Event time still requires the event_<activity> joins; the
+-- object/event-type filters move onto the view's constant projections.
+WITH AcceptedOffers AS (
+    SELECT DISTINCT
+        O2O.ocel_source_id,
+        E2.ocel_id,
+        E2.ocel_time
+    FROM
+        object_object AS O2O
+        INNER JOIN event_object AS E2O2
+            ON E2O2.ocel_object_id = O2O.ocel_target_id
+            AND E2O2.ocel_object_type = 'Offer'
+            AND E2O2.ocel_event_type = 'O_Accepted'
+        INNER JOIN event_O_Accepted AS E2
+            ON E2O2.ocel_event_id = E2.ocel_id
+    WHERE O2O.ocel_source_type = 'Application'
+      AND O2O.ocel_target_type = 'Offer'
+)
+SELECT
+    A1.ocel_id,
+    E1.ocel_id,
+    (
+        SELECT COUNT(*)
+        FROM AcceptedOffers AS AO
+        WHERE AO.ocel_source_id = A1.ocel_id
+          AND E1.ocel_time <= AO.ocel_time
+    ) >= 1 AS satisfied
+FROM
+    object_Application AS A1
+    INNER JOIN event_object AS E2O
+        ON E2O.ocel_object_id = A1.ocel_id
+        AND E2O.ocel_object_type = 'Application'
+        AND E2O.ocel_event_type = 'A_Accepted'
+    INNER JOIN event_A_Accepted AS E1
+        ON E2O.ocel_event_id = E1.ocel_id;

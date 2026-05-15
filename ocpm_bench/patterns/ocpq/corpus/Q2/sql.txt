@@ -1,0 +1,16 @@
+SELECT
+    A1.ocel_id,
+    E1.ocel_id,
+    (
+        SELECT
+            COUNT(*)
+        FROM
+            event_O_Returned AS X
+            INNER JOIN event_object as XE2O ON XE2O.ocel_event_id = X.ocel_id
+        WHERE
+            XE2O.ocel_object_id = A1.ocel_id
+    ) >= 1 as satisfied
+FROM
+    object_Offer AS A1
+    INNER JOIN event_object AS E2O ON E2O.ocel_object_id = A1.ocel_id
+    INNER JOIN event_O_Created AS E1 ON E2O.ocel_event_id = E1.ocel_id

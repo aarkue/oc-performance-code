@@ -1,0 +1,14 @@
+# Small-scale trace-variants run on BPIC17.
+
+repetitions: 2
+matrix_passes: 1
+randomize_cell_order: false
+results_path: results/variants-small.jsonl
+
+cells:
+  - { model: linked_ocel, pattern: variants, dataset: bpic17 }
+  # - { model: sqlite_mem, pattern: variants, dataset: bpic17 }
+  - { model: duckdb, pattern: variants, dataset: bpic17 }
+  - { model: kuzu, pattern: variants, dataset: bpic17 }
+  - { model: polars, pattern: variants, dataset: bpic17 }
+  # - { model: pandas, pattern: variants, dataset: bpic17 }
