@@ -12,8 +12,11 @@ dist/
 build/
 *.egg-info/
 
-# Project data (fetched via scripts, not committed)
-data/
+# Project data (mostly not committed; BPIC17 source .gz is whitelisted below)
+data/*
+!data/bpic17/
+data/bpic17/*
+!data/bpic17/bpic2017-ocel2.canonical.json.gz
 cache/
 
 # Benchmark results (large, per-machine)

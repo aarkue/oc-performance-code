@@ -25,20 +25,34 @@ Cached exports live under `code/cache/<dataset>/<model>/`.
 
 Requires Python 3.14.
 
+With [uv](https://docs.astral.sh/uv/) (recommended):
+
 ```bash
 uv venv .venv --python 3.14
 source .venv/bin/activate
 uv pip install -e ".[dev]"
-# r4pm requires a custom build with OCPQ support; the normal PyPI release does not include it. 
-# See https://github.com/aarkue/r4pm/releases or use 
-# uv pip install "r4pm==0.5.5a1"
+# r4pm requires a custom build with OCPQ support; the normal PyPI release does not include it.
+# See https://github.com/aarkue/r4pm/releases or use
+# uv pip install "r4pm==0.5.5a2"
 # or uv pip install <path-to-r4pm-wheel> if you downloaded a wheel (e.g., from GitHub)
 ```
 
-Put the BPIC17 OCEL file on disk:
+Or with the standard library `venv` + `pip` (Python 3.14 must already be installed):
 
-- default: `data/bpic17/bpic2017-ocel2.canonical.json`
-- override: set `OCPM_BPIC17_PATH=/path/to/file.json`
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+# Same r4pm caveat as above, e.g.:
+# pip install "r4pm==0.5.5a2"
+# or pip install <path-to-r4pm-wheel>
+```
+
+BPIC17 OCEL source file:
+
+- bundled with the repo at `code/data/bpic17/bpic2017-ocel2.canonical.json.gz` (~54 MB gzipped)
+- loaded directly from the gzip; no manual decompression needed
+- override with `OCPM_BPIC17_PATH=/path/to/file.json[.gz]` to point at a different copy
 
 The OCPQ Q1 to Q7 query files used by the benchmark are bundled under
 `ocpm_bench/patterns/ocpq/corpus/`.
