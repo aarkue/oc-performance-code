@@ -29,23 +29,29 @@ With [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
 uv venv .venv --python 3.14
-source .venv/bin/activate
+# Activate the venv:
+#   Linux/macOS:        source .venv/bin/activate
+#   Windows PowerShell: .venv\Scripts\Activate.ps1
+#   Windows cmd.exe:    .venv\Scripts\activate.bat
 uv pip install -e ".[dev]"
 # r4pm requires a custom build with OCPQ support; the normal PyPI release does not include it.
-# See https://github.com/aarkue/r4pm/releases or use
-# uv pip install "r4pm==0.5.5a2"
-# or uv pip install <path-to-r4pm-wheel> if you downloaded a wheel (e.g., from GitHub)
+# Install the prerelease (with the polars extra) from https://github.com/aarkue/r4pm/releases or use:
+# uv pip install "r4pm[polars]==0.5.5a2"
+# or uv pip install "<path-to-r4pm-wheel>[polars]" if you downloaded a wheel (e.g., from GitHub)
 ```
 
 Or with the standard library `venv` + `pip` (Python 3.14 must already be installed):
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+# Activate the venv:
+#   Linux/macOS:        source .venv/bin/activate
+#   Windows PowerShell: .venv\Scripts\Activate.ps1
+#   Windows cmd.exe:    .venv\Scripts\activate.bat
 pip install -e ".[dev]"
 # Same r4pm caveat as above, e.g.:
-# pip install "r4pm==0.5.5a2"
-# or pip install <path-to-r4pm-wheel>
+# pip install "r4pm[polars]==0.5.5a2"
+# or pip install "<path-to-r4pm-wheel>[polars]"
 ```
 
 BPIC17 OCEL source file:
