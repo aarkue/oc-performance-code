@@ -1,0 +1,28 @@
+# Build / install artifacts
+.venv/
+**/__pycache__/
+**/*.pyc
+*.egg-info/
+
+# Run outputs (mounted as volumes at runtime)
+results/
+cache/
+
+# Ignore everything under data/ except the canonical gzip the loader reads.
+data/*
+!data/bpic17/
+data/bpic17/*
+!data/bpic17/bpic2017-ocel2.canonical.json.gz
+
+# Editor / VCS noise
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# Docker meta (keep build context clean)
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.yaml

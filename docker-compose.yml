@@ -1,0 +1,27 @@
+# See README "Setup with Docker" for usage.
+
+services:
+  bench:
+    build:
+      context: .
+    image: ocpm-bench:latest
+    volumes:
+      - ./results:/app/results
+      - ./cache:/app/cache
+
+  dev:
+    build:
+      context: .
+    image: ocpm-bench:latest
+    entrypoint: ["/bin/bash"]
+    stdin_open: true
+    tty: true
+    working_dir: /app
+    volumes:
+      - .:/app
+      - venv:/opt/venv
+      - ./results:/app/results
+      - ./cache:/app/cache
+
+volumes:
+  venv:

@@ -63,6 +63,49 @@ BPIC17 OCEL source file:
 The OCPQ Q1 to Q7 query files used by the benchmark are bundled under
 `ocpm_bench/patterns/ocpq/corpus/`.
 
+## Setup with Docker
+
+A `Dockerfile` and `docker-compose.yml` are provided as an alternative to the
+local Python install. The image pins Python 3.14, installs the project in
+editable mode, and installs the r4pm prerelease that bundles OCPQ support.
+
+Build once:
+
+```bash
+docker compose build
+```
+
+Run a one-shot benchmark (results and cache are bind-mounted to the host so
+output is persisted across runs):
+
+```bash
+docker compose run --rm bench matrix --spec configs/dfg-small.yaml
+```
+
+Run the plotting script (writes PNG and PDF next to the input JSONL in the
+mounted `results/` directory):
+
+```bash
+docker compose run --rm --entrypoint python bench scripts/plot_results.py results/dfg-small.jsonl
+```
+
+The same image also works for development. The `dev` service bind-mounts the
+whole `code/` directory on top of `/app`, so edits to `ocpm_bench/`, `configs/`,
+or `scripts/` are picked up live (the install is editable):
+
+```bash
+docker compose run --rm dev          # interactive bash shell
+# inside the container:
+ocpm-bench matrix --spec configs/dfg-small.yaml
+ruff check ocpm_bench
+```
+
+On Docker Desktop (macOS/Windows), raise the VM memory to at least 8 GB
+(Settings -> Resources). Larger datasets will OOM at the default 2 GB cap.
+
+Note on benchmark numbers: Docker adds overhead, prefer a native install for
+paper-grade numbers.
+
 ## Running
 
 Run one cell:
