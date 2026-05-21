@@ -94,6 +94,19 @@ class OcedCsvImportQueryLibrary:
         print(query_str)
 
         return query_str
+    
+    # @staticmethod
+    # def q_add_df_relation():
+    #     query_str = f'''
+    #         MATCH (n:Entity)
+    #         MATCH (n)<-[:CORR]-(e)
+    #         WITH n, e AS nodes ORDER BY e.time, ID(e)
+    #         WITH n, collect(nodes) AS event_node_list
+    #         UNWIND range(0, size(event_node_list)-2) AS i
+    #         WITH n, event_node_list[i] AS e1, event_node_list[i+1] AS e2
+    #         MERGE (e1)-[df:DF {{EntityType:n.EntityType, ID:n.ID}}]->(e2)'''
+    #     print(query_str)
+    #     return query_str
 
     @staticmethod
     def q_load_csv_as_e2o_relation(fileName):
@@ -222,7 +235,13 @@ class Neo4jModelStrong:
                 labels = label_to_split.split('__')
                 
                 print(labels)
-                rel_label = label_to_split
+                if labels[0] == "E2O":
+                    rel_label = "CORR"
+                if labels[0] == "O2O":
+                    rel_label = "REL"
+                if labels[0] == "Attrs":
+                    rel_label = "HAS_ATTRIBUTE"
+
                 source_label = labels[1]
                 target_label = labels[2]
 
