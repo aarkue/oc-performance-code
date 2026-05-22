@@ -1,15 +1,17 @@
 # Small OCPQ matrix.
 
-repetitions: 10
+repetitions: 1
 matrix_passes: 1
-randomize_cell_order: true
+randomize_cell_order: false
+cell_timeout_seconds: 900  # 15 minutes per cell; timed-out cells produce no row
 results_path: results/ocpq-small.jsonl
 
 cells:
+  - { model: neo4j_strong, pattern: ocpq, dataset: bpic17 }
   - { model: linked_ocel, pattern: ocpq, dataset: bpic17 }
   # - { model: sqlite_mem, pattern: ocpq, dataset: bpic17 }
-  - { model: duckdb, pattern: ocpq, dataset: bpic17 }
-  - { model: duckdb_strong_rels, pattern: ocpq, dataset: bpic17 }
-  - { model: kuzu, pattern: ocpq, dataset: bpic17 }
-  - { model: polars, pattern: ocpq, dataset: bpic17 }
+  # - { model: duckdb, pattern: ocpq, dataset: bpic17 }
+  # - { model: duckdb_strong_rels, pattern: ocpq, dataset: bpic17 }
+  # - { model: kuzu, pattern: ocpq, dataset: bpic17 }
+  # - { model: polars, pattern: ocpq, dataset: bpic17 }
   # - { model: pandas, pattern: ocpq, dataset: bpic17 }

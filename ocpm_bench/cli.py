@@ -12,6 +12,7 @@ import click
 import yaml
 
 import ocpm_bench.registrations  # populates the harness registry
+from ocpm_bench.harness import registry
 from ocpm_bench.harness.results import write_jsonl
 from ocpm_bench.harness.runner import run_cell
 
@@ -19,6 +20,48 @@ from ocpm_bench.harness.runner import run_cell
 @click.group()
 def main() -> None:
     """ocpm-bench: benchmark harness for object-centric data-access patterns."""
+
+
+def _prepare_pairs(cells: list[dict]) -> None:
+    """Untimed model.setup() once per unique (model, dataset) pair."""
+    seen: set[tuple[str, str]] = set()
+    pairs: list[tuple[str, str]] = []
+    for c in cells:
+        key = (c["model"], c["dataset"])
+        if key in seen:
+            continue
+        seen.add(key)
+        pairs.append(key)
+
+    for i, (model, dataset) in enumerate(pairs, 1):
+        if model not in registry.MODELS:
+            click.echo(f"[prepare {i}/{len(pairs)}] skip: unknown model {model!r}", err=True)
+            continue
+        if dataset not in registry.DATASETS:
+            click.echo(f"[prepare {i}/{len(pairs)}] skip: unknown dataset {dataset!r}", err=True)
+            continue
+        click.echo(f"[prepare {i}/{len(pairs)}] {model}/{dataset} ...", err=True)
+        t0 = time.perf_counter()
+        model_obj = registry.MODELS[model]()
+        ds_obj = registry.DATASETS[dataset]()
+        ds_obj.fetch()
+        try:
+            model_obj.setup(ds_obj)
+        finally:
+            model_obj.teardown()
+        click.echo(
+            f"[prepare {i}/{len(pairs)}] {model}/{dataset} ok in "
+            f"{time.perf_counter() - t0:.1f}s",
+            err=True,
+        )
+
+
+@main.command()
+@click.option("--spec", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def prepare(spec: Path) -> None:
+    """Untimed setup for every (model, dataset) pair in SPEC."""
+    cfg = yaml.safe_load(spec.read_text())
+    _prepare_pairs(list(cfg["cells"]))
 
 
 @main.command()
@@ -50,9 +93,13 @@ def run(
 
 @main.command()
 @click.option("--spec", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def matrix(spec: Path) -> None:
+@click.option("--prepare", "do_prepare", is_flag=True,
+              help="Run untimed prepare phase (model.setup) for each (model, dataset) pair before measuring.")
+def matrix(spec: Path, do_prepare: bool) -> None:
     """Run every cell in SPEC, one subprocess per cell, in randomized order."""
     cfg = yaml.safe_load(spec.read_text())
+    if do_prepare:
+        _prepare_pairs(list(cfg["cells"]))
     out_path = Path(cfg["results_path"])
     repetitions = int(cfg.get("repetitions", 10))
     passes = int(cfg.get("matrix_passes", 2))

@@ -1,8 +1,9 @@
 """DFG pattern: per-object-type directly-follows pairs.
 
 Each engine's `run()` materializes canonical `(str, str, int)` rows inside
-the timed region. The only untimed work is Kuzu's cleaned-label-to-OCEL-name
-translation, which is benchmark-induced (Kuzu mangles type labels).
+the timed region. The only untimed work is the cleaned-label-to-OCEL-name
+translation for Kuzu and Neo4j, which is benchmark-induced (both backends
+mangle type labels with non-alphanumeric chars).
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ def _instances(dataset) -> list[tuple[str, Any]]:
 
 
 def _post_process(raw, inputs: PerTypeInputs, model):
-    if model.name == "kuzu":
+    if model.name in ("kuzu", "neo4j_strong"):
         translate = model.original_name
         return [(translate(src), translate(tgt), cnt) for src, tgt, cnt in raw]
     return raw

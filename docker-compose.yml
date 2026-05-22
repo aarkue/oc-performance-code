@@ -1,27 +1,75 @@
 # See README "Setup with Docker" for usage.
 
 services:
+  neo4j:
+    image: neo4j:5
+    environment:
+      # 8+ char password is required by Neo4j 5; keep in sync with the
+      # OCPM_NEO4J_PASSWORD env on bench/dev.
+      NEO4J_AUTH: neo4j/testpassword
+      # Bench imports BPIC17 via LOAD CSV; raise heap if you hit GC stalls.
+      NEO4J_server_memory_heap_max__size: 4G
+    volumes:
+      - neo4j-data:/data
+      - neo4j-import:/var/lib/neo4j/import
+    ports:
+      - "7474:7474"   # Browser
+      - "7687:7687"   # Bolt
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   bench:
     build:
       context: .
     image: ocpm-bench:latest
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      OCPM_NEO4J_URI: bolt://neo4j:7687
+      OCPM_NEO4J_USER: neo4j
+      OCPM_NEO4J_PASSWORD: testpassword
+      OCPM_NEO4J_DATABASE: neo4j
+      # Shared with the neo4j container: bench writes CSVs here, Neo4j reads
+      # them via `file:///...` (mapped to /var/lib/neo4j/import on the server).
+      OCPM_NEO4J_IMPORT_DIR: /neo4j-import
+      # Read-only mount of the Neo4j data dir so size_on_disk() can report
+      # store bytes. Optional - omit if you don't need it.
+      OCPM_NEO4J_STORE_DIR: /neo4j-data
     volumes:
       - ./results:/app/results
       - ./cache:/app/cache
+      - neo4j-import:/neo4j-import
+      - neo4j-data:/neo4j-data:ro
 
   dev:
     build:
       context: .
     image: ocpm-bench:latest
+    depends_on:
+      neo4j:
+        condition: service_healthy
     entrypoint: ["/bin/bash"]
     stdin_open: true
     tty: true
     working_dir: /app
+    environment:
+      OCPM_NEO4J_URI: bolt://neo4j:7687
+      OCPM_NEO4J_USER: neo4j
+      OCPM_NEO4J_PASSWORD: testpassword
+      OCPM_NEO4J_DATABASE: neo4j
+      OCPM_NEO4J_IMPORT_DIR: /neo4j-import
+      OCPM_NEO4J_STORE_DIR: /neo4j-data
     volumes:
       - .:/app
-      - venv:/opt/venv
       - ./results:/app/results
       - ./cache:/app/cache
+      - neo4j-import:/neo4j-import
+      - neo4j-data:/neo4j-data:ro
 
 volumes:
-  venv:
+  neo4j-data:
+  neo4j-import:

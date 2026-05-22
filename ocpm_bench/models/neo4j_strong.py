@@ -1,262 +1,331 @@
+"""Neo4j strongly-typed model: one NODE label per OCEL event/object type,
+REL labels `E2O` and `O2O`. Setup builds a typed Kuzu DB, exports per-table
+CSVs, then `LOAD CSV` into the live Neo4j instance.
+
+Env: OCPM_NEO4J_{URI,USER,PASSWORD,DATABASE,IMPORT_DIR,STORE_DIR}.
+IMPORT_DIR is required (LOAD CSV reads `file:///` from there).
+"""
+
+from __future__ import annotations
+
 import os
-import pandas as pd
-import csv,os
 import shutil
+import subprocess
+import sys
+from pathlib import Path
 
-from neo4j import GraphDatabase
-from neo4j import Driver
+from neo4j import Driver, GraphDatabase
 
-class OcedCsvImportQueryLibrary:
+from ocpm_bench.datasets.base import Dataset
+from ocpm_bench.harness import cache as _cache
+from ocpm_bench.harness import registry
+from ocpm_bench.models._versions import package_version, python_version
+from ocpm_bench.models.kuzu import _export_typed, _build_name_info, path_size
+from ocpm_bench.models.primitives import clean_type_name, normalize_timestamp
 
-    @staticmethod
-    # create index on nodes with label 'node_label', for a specific attribute 'id'
-    def q_create_index(nodel_label, id):
-        # create index if it does not exist yet, to speed up loading and querying
-        index_query = f'CREATE INDEX {nodel_label}_{id} IF NOT EXISTS FOR (n:{nodel_label}) ON (n.{id})'
-        print(index_query)
-        return index_query
-
-    @staticmethod
-    # delete all relationships
-    def q_delete_relations():
-        q = f'MATCH ()-[r]->() CALL (r) {{ DELETE r }} IN TRANSACTIONS OF 1000 ROWS;'
-        print(q)
-        return q
-
-    @staticmethod
-    # delete all nodes
-    def q_delete_nodes():
-        q = f'MATCH (n) CALL (n) {{ DELETE n }} IN TRANSACTIONS OF 1000 ROWS;'
-        print(q)
-        return q
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_EXPORT_SCRIPT = _PROJECT_ROOT / "scripts" / "export_kuzu_csv.py"
 
 
-    @staticmethod
-    # Use Neo4j's bulk import from CSV to create on :event node per record in CSV file
-    # - 'fileName' is the system file path to the CSV file from which Neo4j will load
-    # - 'logHeader' the list of attribute names of the CSV file
-    # - an optional `LogID` to distinguish events coming from different event logs
-    def q_load_csv_as_nodes(fileName, csvHeader, nodeLabel):
+def _q_create_index(label: str, attr: str) -> str:
+    return f"CREATE INDEX {label}_{attr} IF NOT EXISTS FOR (n:`{label}`) ON (n.`{attr}`)"
 
-        # import each row of the CSV one by one, as variable 'line' 
-        query_str = f'LOAD CSV WITH HEADERS FROM \"file:///{fileName}\" as line\n'
-        query_str += 'CALL (line) {\n'
-        query_str += ' WITH line\n'
 
-        # per line create a node
-        query_str = query_str + f' CREATE (e:{nodeLabel} {{ '
-        # subsequent lines specify how the attribute of event e are set (from "line')
+def _q_delete_relations() -> str:
+    return "MATCH ()-[r]->() CALL (r) { DELETE r } IN TRANSACTIONS OF 1000 ROWS;"
 
-        # for each colum in the header, set attribute 'column' of event e to the value line.column
-        for col in csvHeader:
-            # allow type conversion by Neo4j during import
-            if col in ['time','timestamp','start','end']:
-                # tell Neo4j to typecast timestamp attributes to dateTime during import
-                colValue = f'datetime(line.{col})'
-            else:
-                # every other attribute is just the value stored in the column in that line
-                colValue = 'line.'+col
 
-            # distinguish final event to close the CREATE query properly
-            if (csvHeader.index(col) < len(csvHeader)-1):
-                query_str = query_str + f' {col}: {colValue},'
-            else:
-                query_str = query_str + f' {col}: {colValue} }})'
+def _q_delete_nodes() -> str:
+    return "MATCH (n) CALL (n) { DELETE n } IN TRANSACTIONS OF 1000 ROWS;"
 
-        query_str += '\n'    
-        query_str += '} IN TRANSACTIONS OF 1000 ROWS;'
 
-        print(query_str)
+def _q_load_csv_as_nodes(file_name: str, header: list[str], node_label: str) -> str:
+    parts: list[str] = []
+    for col in header:
+        if col in ("time", "timestamp", "start", "end"):
+            value = f"datetime(line.`{col}`)"
+        else:
+            value = f"line.`{col}`"
+        parts.append(f" `{col}`: {value}")
+    create_props = ", ".join(parts)
+    return (
+        f'LOAD CSV WITH HEADERS FROM "file:///{file_name}" AS line\n'
+        f"CALL (line) {{\n"
+        f" WITH line\n"
+        f" CREATE (e:`{node_label}` {{{create_props} }})\n"
+        f"}} IN TRANSACTIONS OF 1000 ROWS;"
+    )
 
-        return query_str
-    
-    @staticmethod
-    def q_link_node_to_node(sourceNode, sourceAttribute, relationship, targetNode, targetAttribute):
-        query_str = f'''
-            MATCH (t:{targetNode}) WITH t
-            MATCH (s:{sourceNode} {{ {sourceAttribute}: t.{targetAttribute} }}) WITH s,t
-            MERGE (s)-[:{relationship}]->(t)'''
-        print(query_str)
-        return query_str
-    
-    @staticmethod
-    def q_load_csv_as_relation(fileName, csvSourceId, sourceLabel, sourceIdAttr, csvRelationType, relationship, csvTargetId, targetLabel, targetIdAttribute):
-        # import each row of the CSV one by one, as variable 'line' 
-        query_str = f'''
-            LOAD CSV WITH HEADERS FROM \"file:///{fileName}\" as line
-            CALL (line) {{
-             WITH line
-              MATCH (s:{sourceLabel} {{ {sourceIdAttr}:line.{csvSourceId} }} )
-              MATCH (n:{targetLabel} {{ {targetIdAttribute}:line.{csvTargetId} }} )
-              MERGE (s) -[r:{relationship}]-> (n) ON CREATE SET r.type=line.{csvRelationType}
-            }} IN TRANSACTIONS OF 1000 ROWS;'''
 
-        print(query_str)
+def _q_load_csv_as_relation(
+    file_name: str,
+    source_label: str,
+    target_label: str,
+    rel_label: str,
+) -> str:
+    return (
+        f'LOAD CSV WITH HEADERS FROM "file:///{file_name}" AS line\n'
+        f"CALL (line) {{\n"
+        f" WITH line\n"
+        f"  MATCH (s:`{source_label}` {{ id: line.start_id }})\n"
+        f"  MATCH (n:`{target_label}` {{ id: line.end_id }})\n"
+        f"  MERGE (s)-[r:`{rel_label}`]->(n)\n"
+        f"  ON CREATE SET r.qualifier = line.qualifier\n"
+        f"}} IN TRANSACTIONS OF 1000 ROWS;"
+    )
 
-        return query_str
-    
-    # @staticmethod
-    # def q_add_df_relation():
-    #     query_str = f'''
-    #         MATCH (n:Entity)
-    #         MATCH (n)<-[:CORR]-(e)
-    #         WITH n, e AS nodes ORDER BY e.time, ID(e)
-    #         WITH n, collect(nodes) AS event_node_list
-    #         UNWIND range(0, size(event_node_list)-2) AS i
-    #         WITH n, event_node_list[i] AS e1, event_node_list[i+1] AS e2
-    #         MERGE (e1)-[df:DF {{EntityType:n.EntityType, ID:n.ID}}]->(e2)'''
-    #     print(query_str)
-    #     return query_str
 
-    @staticmethod
-    def q_load_csv_as_e2o_relation(fileName):
-        return OcedCsvImportQueryLibrary.q_load_csv_as_relation(fileName, "eventId", "Event", "id", "qualifier", "CORR", "objectId", "Entity", "id")
+def _run_kuzu_csv_export(kuzu_path: Path, out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [sys.executable, str(_EXPORT_SCRIPT), str(kuzu_path), str(out_dir)],
+        check=True,
+    )
 
-class OcedCsvImport:
-    def __init__(self, driver: Driver):
-        self.driver = driver
 
-    # execute a query
-    def _run_query(self, query: str):
-        with self.driver.session() as session:
-            result = session.run(query).single()
-            if result != None: 
-                return result.value()
-            else:
-                return None
+def _read_csv_header(path: Path) -> list[str]:
+    import csv as _csv
+    with path.open() as f:
+        return list(next(_csv.reader(f)))
 
-    # load csv header (attribute names) from import file
-    @staticmethod
-    def _get_csv_header(fileName):
-        with open(fileName) as f:
-            reader = csv.reader(f)
-            logHeader = list(next(reader))
-            f.close()
-        return logHeader
-
-    # create index on nodes with label 'node_label', for a specific attribute 'id'
-    def _create_index(self, nodel_label, id):
-        index_query = OcedCsvImportQueryLibrary.q_create_index(nodel_label, id)
-        self._run_query(index_query)
-
-    # import records from 'csv' file as nodes with label 'node_label'
-    def _import_nodes(self, csv_path, csv_file, node_label):
-        print("Import "+node_label+" from "+csv_file)
-        
-        # need full path to csv file for correct import query for neo4j
-        full_path = os.path.realpath(csv_path+csv_file)
-        # need csv header to generate load query
-        header = OcedCsvImport._get_csv_header(full_path)
-        # generate query for loading nodes
-        load_query = OcedCsvImportQueryLibrary.q_load_csv_as_nodes(csv_file, header, node_label)
-        # run the query
-        self._run_query(load_query)
-
-    # import ocel2 events from prepared event table csv
-    def import_events(self):
-        self._create_index("Event", "id")
-        self._import_nodes(self.csv_events, "Event")
-
-    # import ocel2 objects from prepared object table csv
-    def import_objects(self):
-        self._create_index("Entity", "id")
-        self._import_nodes(self.csv_objects, "Entity")
-
-    # import ocel2 object attributes from prepared attribute table csv
-    def import_object_attributes(self):
-        # import attribute nodes        
-        self._import_nodes(self.csv_object_attributes, "EntityAttribute")
-        # link attribute nodes to object nodes
-        link_query = OcedCsvImportQueryLibrary.q_link_node_to_node("Entity", "id", "HAS_ATTRIBUTE", "EntityAttribute", "id")
-        self._run_query(link_query)
-
-    # import ocel2 event-object relation from relation tabel csv
-    def import_e2o_relation(self):
-
-        print("Import relation from "+self.csv_relations_e2o)
-
-        # need full path to csv file for correct import query for neo4j
-        full_path = os.path.realpath(self.csv_relations_e2o)
-        # load the event-object relation csv as relation
-        ### resolve 'eventId' to an 'Event' node with matching 'id'
-        ### create CORR relation with type 'qualifier'
-        ### resolve 'objectId' to an 'Entity' node with matching 'id' 
-        load_query = OcedCsvImportQueryLibrary.q_load_csv_as_relation(full_path, "eventId", "Event", "id", "qualifier", "CORR", "objectId", "Entity", "id")
-        self._run_query(load_query)
 
 class Neo4jModelStrong:
-    name = "neo4jstrong"
+    name = "neo4j_strong"
 
     def __init__(self) -> None:
-        # connection to Neo4J database
-        self._driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "12345678"))
-        self._db_instance_dir = "C:/Users/dfahland/.Neo4jDesktop2/Data/dbmss/dbms-3ed2a1de-63f0-4617-858f-910db803a1f9"
-        self._db_instance_import_dir = self._db_instance_dir+"/import/"
+        self._driver: Driver | None = None
+        self._database: str = "neo4j"
+        self._import_dir: Path | None = None
+        self._store_dir: Path | None = None
+        self._name_map: dict[str, str] = {}
+        self._ev_types: list[str] = []
+        self._ob_types: list[str] = []
 
-        # ensure import directory exists
-        if not os.path.exists(self._db_instance_import_dir):  
-            os.makedirs(self._db_instance_import_dir)
+    def setup(self, dataset: Dataset) -> None:
+        dataset.fetch()
+        src = dataset.resolved_path()
 
-        self._import = OcedCsvImport(self._driver)
-    
-    #def setup(self, dataset: Dataset) -> None:
-    def setup(self) -> None:
+        uri = os.environ.get("OCPM_NEO4J_URI", "bolt://localhost:7687")
+        user = os.environ.get("OCPM_NEO4J_USER", "neo4j")
+        password = os.environ.get("OCPM_NEO4J_PASSWORD", "neo4j")
+        self._database = os.environ.get("OCPM_NEO4J_DATABASE", "neo4j")
 
-        self._import._run_query(OcedCsvImportQueryLibrary.q_delete_relations())
-        self._import._run_query(OcedCsvImportQueryLibrary.q_delete_nodes())
+        import_dir = os.environ.get("OCPM_NEO4J_IMPORT_DIR")
+        if not import_dir:
+            raise RuntimeError(
+                "Neo4jModelStrong: set OCPM_NEO4J_IMPORT_DIR to the absolute "
+                "path of your Neo4j instance's import/ directory."
+            )
+        self._import_dir = Path(import_dir)
+        self._import_dir.mkdir(parents=True, exist_ok=True)
 
-        import_path = "./data/bpic17/bpic17-strong-csv/"
-        
-        import_path_nodes = os.path.realpath(import_path + "nodes/")
-        for file in os.listdir(import_path_nodes):
-            if file.endswith(".csv"):
-                f = os.path.join(import_path_nodes, file)
+        store_dir = os.environ.get("OCPM_NEO4J_STORE_DIR")
+        self._store_dir = Path(store_dir) if store_dir else None
 
-                # copy file to neo4j import directory for loading
-                dest = os.path.join(self._db_instance_import_dir, file)
-                shutil.copy(f, dest)
+        driver = GraphDatabase.driver(uri, auth=(user, password))
+        driver.verify_connectivity()
+        self._driver = driver
 
-                label = file[:-4]
-                self._import._create_index(label, "id")
-                self._import._import_nodes(self._db_instance_import_dir, file, label)
+        kuzu_path = _cache.get_or_export(
+            dataset=dataset.name,
+            model="kuzu",
+            source=src,
+            payload_name=f"{dataset.name}-strong.kuzu",
+            export=lambda out: _export_typed(str(src), out),
+        )
+
+        csv_dir = _cache.get_or_export(
+            dataset=dataset.name,
+            model=self.name,
+            source=src,
+            payload_name=f"{dataset.name}-strong-csv",
+            export=lambda out: _run_kuzu_csv_export(kuzu_path, out),
+        )
+
+        # Marker freshness keys on the OCEL source fingerprint only; pointing
+        # at a different Neo4j instance requires `cache clean --model neo4j_strong`.
+        _cache.get_or_export(
+            dataset=dataset.name,
+            model=self.name,
+            source=src,
+            payload_name=f"{dataset.name}-strong-loaded.marker",
+            export=lambda marker: self._wipe_and_load(csv_dir, marker),
+        )
+
+        self._name_map, self._ev_types, self._ob_types = _build_name_info(str(src))
+
+    def teardown(self) -> None:
+        if self._driver is not None:
+            self._driver.close()
+            self._driver = None
+
+    def size_on_disk(self) -> int:
+        return path_size(self._store_dir) if self._store_dir else 0
+
+    def reset_caches(self) -> None:
+        try:
+            self._run_write("CALL db.clearQueryCaches();")
+        except Exception:
+            pass
+
+    def library_versions(self) -> dict[str, str]:
+        versions = {
+            "neo4j": package_version("neo4j"),
+            "r4pm": package_version("r4pm"),
+            "python": python_version(),
+        }
+        try:
+            rows = self.execute_cypher(
+                "CALL dbms.components() YIELD name, versions "
+                "RETURN name, versions[0] AS version"
+            )
+            for name, version in rows:
+                versions[f"neo4j_{name.lower().replace(' ', '_')}"] = str(version)
+        except Exception:
+            pass
+        return versions
+
+    def _session(self):
+        if self._driver is None:
+            raise RuntimeError("Neo4jModelStrong.session called before setup()")
+        return self._driver.session(database=self._database)
+
+    def _run_write(self, query: str, params: dict | None = None) -> None:
+        with self._session() as s:
+            s.run(query, parameters=params or {}).consume()
+
+    def execute_cypher(
+        self, query: str, params: dict | None = None
+    ) -> list[tuple]:
+        with self._session() as s:
+            result = s.run(query, parameters=params or {})
+            return [tuple(record.values()) for record in result]
+
+    def original_name(self, cleaned: str) -> str:
+        return self._name_map.get(cleaned, cleaned)
+
+    def get_event_types(self) -> list[str]:
+        return list(self._ev_types)
+
+    def _wipe_and_load(self, csv_dir: Path, marker_path: Path) -> None:
+        import json as _json
+
+        assert self._import_dir is not None
+
+        self._run_write(_q_delete_relations())
+        self._run_write(_q_delete_nodes())
+
+        nodes_dir = csv_dir / "nodes"
+        rels_dir = csv_dir / "rels"
+        schema_path = csv_dir / "schema.json"
+        if not nodes_dir.is_dir() or not rels_dir.is_dir():
+            raise RuntimeError(
+                f"CSV export at {csv_dir} is missing nodes/ or rels/ subdir"
+            )
+        if not schema_path.is_file():
+            raise RuntimeError(
+                f"CSV export at {csv_dir} is missing schema.json"
+            )
+        schema = _json.loads(schema_path.read_text())
+
+        loaded: list[Path] = []
+        try:
+            for csv_file in sorted(nodes_dir.glob("*.csv")):
+                dest = self._import_dir / csv_file.name
+                shutil.copy(csv_file, dest)
+                loaded.append(dest)
+
+                label = csv_file.stem
+                header = _read_csv_header(csv_file)
+
+                self._run_write(_q_create_index(label, "id"))
+                self._run_write(_q_load_csv_as_nodes(csv_file.name, header, label))
+
+            # Drive rel loading from schema.json instead of parsing filenames:
+            # cleaned type names ending in `_` produce `___` in
+            # `E2O__<Src>__<Dst>.csv`, breaking `split('__')`.
+            for rel_label, rel_info in schema.get("rels", {}).items():
+                for pair in rel_info.get("pairs", []):
+                    csv_rel = pair["csv"]
+                    csv_file = csv_dir / csv_rel
+                    if not csv_file.is_file():
+                        raise RuntimeError(
+                            f"schema.json references missing rel CSV {csv_file}"
+                        )
+                    dest = self._import_dir / csv_file.name
+                    shutil.copy(csv_file, dest)
+                    loaded.append(dest)
+                    self._run_write(
+                        _q_load_csv_as_relation(
+                            csv_file.name, pair["src"], pair["dst"], rel_label
+                        )
+                    )
+        finally:
+            for p in loaded:
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+
+        marker_path.write_text("ok\n")
+
+    def get_object_types(self) -> list[str]:
+        return list(self._ob_types)
+
+    def get_objects_of_type(self, object_type: str) -> list[str]:
+        cleaned = clean_type_name(object_type)
+        rows = self.execute_cypher(f"MATCH (o:`{cleaned}`) RETURN o.id")
+        return [r[0] for r in rows]
+
+    def get_object_type(self, object_id: str) -> str:
+        rows = self.execute_cypher(
+            "MATCH (o) WHERE o.id = $oid AND any(l IN labels(o) WHERE l IN $labels) "
+            "RETURN labels(o)[0]",
+            {"oid": object_id, "labels": [clean_type_name(t) for t in self._ob_types]},
+        )
+        return self.original_name(rows[0][0])
+
+    def get_activity(self, event_id: str) -> str:
+        rows = self.execute_cypher(
+            "MATCH (e) WHERE e.id = $eid AND any(l IN labels(e) WHERE l IN $labels) "
+            "RETURN labels(e)[0]",
+            {"eid": event_id, "labels": [clean_type_name(t) for t in self._ev_types]},
+        )
+        return self.original_name(rows[0][0])
+
+    def get_timestamp(self, event_id: str) -> str:
+        rows = self.execute_cypher(
+            "MATCH (e) WHERE e.id = $eid AND any(l IN labels(e) WHERE l IN $labels) "
+            "RETURN toString(e.time)",
+            {"eid": event_id, "labels": [clean_type_name(t) for t in self._ev_types]},
+        )
+        return normalize_timestamp(rows[0][0])
+
+    def get_events_of_type(self, activity: str) -> list[str]:
+        cleaned = clean_type_name(activity)
+        rows = self.execute_cypher(f"MATCH (e:`{cleaned}`) RETURN e.id")
+        return [r[0] for r in rows]
+
+    def get_events_of_object(self, object_id: str) -> list[str]:
+        rows = self.execute_cypher(
+            "MATCH (e)-[:E2O]->(o) WHERE o.id = $oid RETURN e.id",
+            {"oid": object_id},
+        )
+        return [r[0] for r in rows]
+
+    def get_objects_of_event(self, event_id: str) -> list[str]:
+        rows = self.execute_cypher(
+            "MATCH (e)-[:E2O]->(o) WHERE e.id = $eid RETURN o.id",
+            {"eid": event_id},
+        )
+        return [r[0] for r in rows]
+
+    def get_related_objects(self, object_id: str) -> list[str]:
+        rows = self.execute_cypher(
+            "MATCH (o1)-[:O2O]->(o2) WHERE o1.id = $oid RETURN o2.id",
+            {"oid": object_id},
+        )
+        return [r[0] for r in rows]
 
 
-        import_path_relations = os.path.realpath(import_path + "rels/")
-        for file in os.listdir(import_path_relations):
-            if file.endswith(".csv"):
-                f = os.path.join(import_path_relations, file)
-
-                # copy file to neo4j import directory for loading
-                dest = os.path.join(self._db_instance_import_dir, file)
-                shutil.copy(f, dest)
-
-                # split 'file' on '__' character
-                label_to_split = file[:-4]
-                labels = label_to_split.split('__')
-                
-                print(labels)
-                if labels[0] == "E2O":
-                    rel_label = "CORR"
-                if labels[0] == "O2O":
-                    rel_label = "REL"
-                if labels[0] == "Attrs":
-                    rel_label = "HAS_ATTRIBUTE"
-
-                source_label = labels[1]
-                target_label = labels[2]
-
-                load_query = OcedCsvImportQueryLibrary.q_load_csv_as_relation(
-                    fileName=file,
-                    csvSourceId="start_id",
-                    sourceLabel=source_label,
-                    sourceIdAttr="id",
-                    csvRelationType="qualifier",
-                    relationship=rel_label,
-                    csvTargetId="end_id",
-                    targetLabel=target_label,
-                    targetIdAttribute="id")
-                self._import._run_query(load_query)
-                        
-
-run_neo4j = Neo4jModelStrong()
-run_neo4j.setup()
+registry.register_model("neo4j_strong", Neo4jModelStrong)

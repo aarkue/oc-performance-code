@@ -1,0 +1,26 @@
+# KPI paper matrix on BPIC17.
+# K1 = kpi_heatmap (activity x object-type joint distribution over E2O)
+# K2 = kpi_conversion (Application -> Offer -> O_Accepted conversion rate)
+
+repetitions: 10
+matrix_passes: 1
+randomize_cell_order: true
+cell_timeout_seconds: 3600
+results_path: results/kpi-paper.jsonl
+
+cells:
+  # K1
+  - { model: linked_ocel, pattern: kpi_heatmap,    dataset: bpic17 }
+  - { model: sqlite_mem,  pattern: kpi_heatmap,    dataset: bpic17 }
+  - { model: duckdb,      pattern: kpi_heatmap,    dataset: bpic17 }
+  - { model: kuzu,        pattern: kpi_heatmap,    dataset: bpic17 }
+  - { model: polars,      pattern: kpi_heatmap,    dataset: bpic17 }
+  - { model: pandas,      pattern: kpi_heatmap,    dataset: bpic17 }
+
+  # K2
+  - { model: linked_ocel, pattern: kpi_conversion, dataset: bpic17 }
+  - { model: sqlite_mem,  pattern: kpi_conversion, dataset: bpic17 }
+  - { model: duckdb,      pattern: kpi_conversion, dataset: bpic17 }
+  - { model: kuzu,        pattern: kpi_conversion, dataset: bpic17 }
+  - { model: polars,      pattern: kpi_conversion, dataset: bpic17 }
+  - { model: pandas,      pattern: kpi_conversion, dataset: bpic17 }

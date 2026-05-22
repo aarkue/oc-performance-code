@@ -15,6 +15,7 @@ dependencies = [
     "pyarrow>=15",
     "duckdb>=1.0",
     "kuzu>=0.6",
+    "neo4j>=5.0",
     # r4pm must be built from source (custom build with OCPQ support;
     #   the public PyPI release does not include OCPQ). See the paper
     #   repository for build instructions.

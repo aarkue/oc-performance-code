@@ -1,0 +1,86 @@
+Bootstrap: docker
+From: neo4j:5
+
+# All-in-one image: Neo4j 5 + Python 3.14 + ocpm-bench (incl. r4pm with OCPQ).
+#
+# Build (local, no root):
+#   apptainer build --fakeroot ocpm-bench.sif Apptainer.def
+#
+# Run (compute node):
+#   mkdir -p $PWD/run/{neo4j-data,neo4j-import,results,cache}
+#   apptainer run --writable-tmpfs \
+#     --bind $PWD/run/neo4j-data:/data \
+#     --bind $PWD/run/neo4j-import:/var/lib/neo4j/import \
+#     --bind $PWD/run/results:/app/results \
+#     --bind $PWD/run/cache:/app/cache \
+#     ocpm-bench.sif matrix --spec configs/dfg-small.yaml
+#
+# `--writable-tmpfs` covers neo4j's transient scratch (logs, run/, conf
+# rewrites). Persistent state lives on the bind-mounted /data + import dirs.
+
+%files
+    pyproject.toml /app/pyproject.toml
+    uv.lock /app/uv.lock
+    ocpm_bench /app/ocpm_bench
+    configs /app/configs
+    scripts /app/scripts
+    data /app/data
+    README.md /app/README.md
+
+%post
+    set -e
+    apt-get update
+    apt-get install -y --no-install-recommends curl ca-certificates wget
+    rm -rf /var/lib/apt/lists/*
+
+    # uv standalone installer; place binary on a stable PATH.
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    mv /root/.local/bin/uv /usr/local/bin/uv
+
+    # Project venv (uv handles fetching Python 3.14).
+    cd /app
+    uv venv /opt/venv --python 3.14
+    . /opt/venv/bin/activate
+    uv pip install -e ".[dev]"
+    uv pip install --prerelease=allow "r4pm[polars]==0.5.5a2"
+
+%environment
+    export PATH=/opt/venv/bin:/usr/local/bin:$PATH
+    # Neo4j auth (8+ chars required by Neo4j 5).
+    export NEO4J_AUTH=neo4j/testpassword
+    # ocpm-bench Neo4j wiring; talks to the in-container neo4j started by the
+    # %runscript on bolt://localhost:7687.
+    export OCPM_NEO4J_URI=bolt://localhost:7687
+    export OCPM_NEO4J_USER=neo4j
+    export OCPM_NEO4J_PASSWORD=testpassword
+    export OCPM_NEO4J_DATABASE=neo4j
+    export OCPM_NEO4J_IMPORT_DIR=/var/lib/neo4j/import
+    export OCPM_NEO4J_STORE_DIR=/data
+
+%runscript
+    #!/bin/bash
+    set -e
+
+    # Start Neo4j in the background. The official neo4j:5 image's launcher
+    # lives at /startup/docker-entrypoint.sh.
+    /startup/docker-entrypoint.sh neo4j console >/tmp/neo4j.log 2>&1 &
+    NEO4J_PID=$!
+    trap 'kill -TERM $NEO4J_PID 2>/dev/null || true; wait $NEO4J_PID 2>/dev/null || true' EXIT
+
+    # Wait for HTTP listener to come up, then a short grace for DB init.
+    echo "[apptainer] waiting for Neo4j on http://localhost:7474 ..."
+    for i in $(seq 1 60); do
+        if wget -q --tries=1 --spider http://localhost:7474; then
+            echo "[apptainer] Neo4j up after ${i}s"
+            break
+        fi
+        sleep 1
+    done
+    sleep 3
+
+    cd /app
+    exec ocpm-bench "$@"
+
+%labels
+    org.opencontainers.image.title "ocpm-bench all-in-one"
+    org.opencontainers.image.description "Neo4j 5 + Python 3.14 + ocpm-bench for cluster runs."

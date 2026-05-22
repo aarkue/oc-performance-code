@@ -1,8 +1,8 @@
 """Trace-variants pattern: distinct time-ordered activity sequences per object type, counted.
 
 Each engine's `run()` materializes canonical `(tuple[str,...], int)` rows
-inside the timed region. The only untimed work is Kuzu's cleaned-label-to-
-OCEL-name translation, which is benchmark-induced.
+inside the timed region. The only untimed work is the cleaned-label-to-
+OCEL-name translation for Kuzu and Neo4j, which is benchmark-induced.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def _instances(dataset) -> list[tuple[str, Any]]:
 
 
 def _post_process(raw, inputs: PerTypeInputs, model):
-    if model.name == "kuzu":
+    if model.name in ("kuzu", "neo4j_strong"):
         translate = model.original_name
         return [(tuple(map(translate, trace)), count) for trace, count in raw]
     return raw

@@ -4,10 +4,12 @@ repetitions: 1
 matrix_passes: 1
 randomize_cell_order: false
 results_path: results/dfg-small.jsonl
+cell_timeout_seconds: 900  # 15 minutes per cell; timed-out cells produce no row
 
 cells:
+  - { model: neo4j_strong, pattern: dfg, dataset: bpic17 }
   - { model: linked_ocel, pattern: dfg, dataset: bpic17 }
-  # - { model: sqlite_mem, pattern: dfg, dataset: bpic17 }
+  - { model: sqlite_mem, pattern: dfg, dataset: bpic17 }
   - { model: duckdb, pattern: dfg, dataset: bpic17 }
   - { model: kuzu, pattern: dfg, dataset: bpic17 }
   - { model: polars, pattern: dfg, dataset: bpic17 }

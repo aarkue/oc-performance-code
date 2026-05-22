@@ -1,9 +1,9 @@
 # AB checks for schema variants against their baseline
 
 repetitions: 5
-matrix_passes: 2
-randomize_cell_order: true
-cell_timeout_seconds: 3600
+matrix_passes: 1
+randomize_cell_order: false
+cell_timeout_seconds: 900
 results_path: results/strong_rels-ab.jsonl
 
 cells:
@@ -19,5 +19,9 @@ cells:
   - { model: kuzu_weak, pattern: dfg, dataset: bpic17 }
   - { model: kuzu, pattern: ocpq, dataset: bpic17 }
   - { model: kuzu_weak, pattern: ocpq, dataset: bpic17 }
-  # - { model: sqlite_mem, pattern: variants, dataset: bpic17 }
-  # - { model: sqlite_mem_strong_rels, pattern: variants, dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels, pattern: variants, dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels, pattern: dfg, dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels, pattern: ocpq, dataset: bpic17 }
+  - { model: sqlite_mem, pattern: variants, dataset: bpic17 }
+  - { model: sqlite_mem, pattern: dfg, dataset: bpic17 }
+  - { model: sqlite_mem, pattern: ocpq, dataset: bpic17 }

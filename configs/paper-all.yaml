@@ -1,0 +1,44 @@
+# Combined paper matrix: DFG + variants + OCPQ over all engines.
+
+repetitions: 10
+matrix_passes: 1
+randomize_cell_order: true
+cell_timeout_seconds: 3600
+results_path: results/paper-all.jsonl
+
+cells:
+  # DFG
+  - { model: linked_ocel,             pattern: dfg,      dataset: bpic17 }
+  - { model: duckdb,                  pattern: dfg,      dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: dfg,      dataset: bpic17 }
+  - { model: kuzu,                    pattern: dfg,      dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: dfg,      dataset: bpic17 }
+  - { model: neo4j_strong,            pattern: dfg,      dataset: bpic17 }
+  - { model: polars,                  pattern: dfg,      dataset: bpic17 }
+  - { model: pandas,                  pattern: dfg,      dataset: bpic17 }
+  - { model: sqlite_mem,              pattern: dfg,      dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels,  pattern: dfg,      dataset: bpic17 }
+
+  # Variants
+  - { model: linked_ocel,             pattern: variants, dataset: bpic17 }
+  - { model: duckdb,                  pattern: variants, dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: variants, dataset: bpic17 }
+  - { model: kuzu,                    pattern: variants, dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: variants, dataset: bpic17 }
+  - { model: neo4j_strong,            pattern: variants, dataset: bpic17 }
+  - { model: polars,                  pattern: variants, dataset: bpic17 }
+  - { model: pandas,                  pattern: variants, dataset: bpic17 }
+  - { model: sqlite_mem,              pattern: variants, dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels,  pattern: variants, dataset: bpic17 }
+
+  # OCPQ
+  - { model: linked_ocel,             pattern: ocpq,     dataset: bpic17 }
+  - { model: duckdb,                  pattern: ocpq,     dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: ocpq,     dataset: bpic17 }
+  - { model: kuzu,                    pattern: ocpq,     dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: ocpq,     dataset: bpic17 }
+  - { model: neo4j_strong,            pattern: ocpq,     dataset: bpic17 }
+  - { model: polars,                  pattern: ocpq,     dataset: bpic17 }
+  - { model: pandas,                  pattern: ocpq,     dataset: bpic17 }
+  - { model: sqlite_mem,              pattern: ocpq,     dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels,  pattern: ocpq,     dataset: bpic17 }

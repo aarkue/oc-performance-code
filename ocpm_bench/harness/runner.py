@@ -15,6 +15,33 @@ def _ms_since(t0: float) -> float:
     return (time.perf_counter() - t0) * 1000.0
 
 
+def _format_diff(got, want, schema, limit: int = 10) -> str:
+    if schema.kind == "tuple_set":
+        only_got = sorted(got - want, key=lambda r: tuple(map(str, r)))[:limit]
+        only_want = sorted(want - got, key=lambda r: tuple(map(str, r)))[:limit]
+        lines = [f"  size: got={len(got)} want={len(want)}"]
+        lines.append(
+            f"  only in got ({len(got - want)} rows, first {len(only_got)}):"
+        )
+        lines.extend(f"    {r!r}" for r in only_got)
+        lines.append(
+            f"  only in want ({len(want - got)} rows, first {len(only_want)}):"
+        )
+        lines.extend(f"    {r!r}" for r in only_want)
+        return "\n".join(lines)
+    if schema.kind == "tuple_list_ordered":
+        for i, (a, b) in enumerate(zip(got, want)):
+            if a != b:
+                return (
+                    f"  length: got={len(got)} want={len(want)}; first "
+                    f"mismatch at index {i}: got={a!r} want={b!r}"
+                )
+        if len(got) != len(want):
+            return f"  length differs: got={len(got)} want={len(want)} (prefix matches)"
+        return "  (canonical equal yet correct=False; investigate canonicalize)"
+    return f"  got={got!r} want={want!r}"
+
+
 def _rss_bytes() -> int | None:
     statm = Path("/proc/self/statm")
     if not statm.exists():
@@ -86,9 +113,10 @@ def run_cell(
                 oracle_val = canonicalize(raw_o, spec.pattern.output)
                 correct = (canonical == oracle_val)
                 if strict_correctness and not correct:
+                    diff = _format_diff(canonical, oracle_val, spec.pattern.output)
                     raise AssertionError(
                         f"incorrect result for {model}/{pattern}/{instance_id}/{dataset} "
-                        f"against oracle {spec.pattern.oracle_model}"
+                        f"against oracle {spec.pattern.oracle_model}\n{diff}"
                     )
 
             rows.append(ResultRow.from_observations(

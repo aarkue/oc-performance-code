@@ -2,11 +2,12 @@
 
 Benchmark harness for object-centric process data models.
 
-The benchmark currently covers three access patterns:
+The benchmark currently covers these access patterns:
 
-- directly-follows graphs (`dfg`)
-- trace variants (`variants`)
-- OCPQ Q1 to Q7 (`ocpq`)
+- P1 control flow: directly-follows graphs (`dfg`), trace variants (`variants`)
+- P2 queries: OCPQ Q1 to Q7 (`ocpq`)
+- P3 OC-Perf: per-event synchronization time (`oc_perf_sync`), latest-predecessor counts (`oc_perf_delaying`)
+- P4 BI/KPI: activity x object-type heatmap (`kpi_heatmap`), conversion rate (`kpi_conversion`)
 
 ## Models
 
@@ -17,6 +18,7 @@ Schema choices are encoded in the model id.
 - `sqlite_mem_strong_rels`, `duckdb_strong_rels`: relational schema with per-type relation tables
 - `kuzu`: typed Kuzu graph export
 - `kuzu_weak`: Kuzu graph with generic `Event` and `Object` nodes
+- `neo4j_strong`: Neo4j 5 with per-type node labels + constant `:E2O` / `:O2O` rels
 - `polars`, `pandas`: DataFrame representation (PM4Py-style)
 
 Cached exports live under `code/cache/<dataset>/<model>/`.
@@ -79,7 +81,7 @@ Run a one-shot benchmark (results and cache are bind-mounted to the host so
 output is persisted across runs):
 
 ```bash
-docker compose run --rm bench matrix --spec configs/dfg-small.yaml
+docker compose run --rm bench matrix --prepare --spec configs/dfg-small.yaml
 ```
 
 Run the plotting script (writes PNG and PDF next to the input JSONL in the
@@ -96,7 +98,7 @@ or `scripts/` are picked up live (the install is editable):
 ```bash
 docker compose run --rm dev          # interactive bash shell
 # inside the container:
-ocpm-bench matrix --spec configs/dfg-small.yaml
+ocpm-bench matrix --prepare --spec configs/dfg-small.yaml
 ruff check ocpm_bench
 ```
 
@@ -105,6 +107,31 @@ On Docker Desktop (macOS/Windows), raise the VM memory to at least 8 GB
 
 Note on benchmark numbers: Docker adds overhead, prefer a native install for
 paper-grade numbers.
+
+## Setup with Apptainer
+
+Single-file SIF bundles Neo4j 5, Python 3.14, r4pm and the bench. Install
+apptainer locally (https://apptainer.org/docs/admin/main/installation.html) , then:
+
+```bash
+# Build locally
+apptainer build --fakeroot ocpm-bench.sif Apptainer.def
+
+# Copy to server
+# ....
+
+# Run on a server/compute node
+mkdir -p $PWD/run/{neo4j-data,neo4j-import,results,cache}
+apptainer run --writable-tmpfs \
+  --bind $PWD/run/neo4j-data:/data \
+  --bind $PWD/run/neo4j-import:/var/lib/neo4j/import \
+  --bind $PWD/run/results:/app/results \
+  --bind $PWD/run/cache:/app/cache \
+  ocpm-bench.sif matrix --prepare --spec configs/dfg-small.yaml
+```
+
+Two jobs on the same node collide on bolt port `7687` (apptainer shares the
+host network); use `--exclusive` node allocation under SLURM.
 
 ## Running
 
@@ -117,19 +144,34 @@ ocpm-bench run --model linked_ocel --pattern dfg --dataset bpic17
 Run a matrix:
 
 ```bash
-ocpm-bench matrix --spec configs/dfg-small.yaml
+ocpm-bench matrix --prepare --spec configs/dfg-small.yaml
+```
+
+`--prepare` runs an untimed `model.setup()` for every unique (model, dataset)
+pair in the spec before measurement begins (kuzu cache build, CSV export,
+neo4j data load). Per-cell setup in the measurement subprocesses then hits
+warm state, so `cell_timeout_seconds` bounds the query work rather than the
+one-time load.
+
+Standalone prepare (e.g. after wiping `cache/`):
+
+```bash
+ocpm-bench prepare --spec configs/paper-all.yaml
 ```
 
 Common specs:
 
-| spec                               | contents                                     |
-| ---------------------------------- | -------------------------------------------- |
-| `dfg-{small,paper}.yaml`           | engine-native DFG                            |
-| `variants-{small,paper}.yaml`      | engine-native trace variants                 |
-| `ocpq-{small,paper}.yaml`          | OCPQ Q1 to Q7                                |
-| `dfg_prim-{small,paper}.yaml`      | DFG via shared `PrimitiveAccess`             |
-| `variants_prim-{small,paper}.yaml` | trace variants via shared `PrimitiveAccess`  |
-| `strong_rels-ab.yaml`              | DuckDB strong-rels and Kuzu weak comparisons |
+| spec                               | contents                                       |
+| ---------------------------------- | ---------------------------------------------- |
+| `paper-{small,all}.yaml`           | all engines x DFG + variants + OCPQ (combined) |
+| `dfg-{small,paper}.yaml`           | engine-native DFG                              |
+| `variants-{small,paper}.yaml`      | engine-native trace variants                   |
+| `ocpq-{small,paper}.yaml`          | OCPQ Q1 to Q7                                  |
+| `perf-{small,paper}.yaml`          | OC-Perf W1 (sync) + W2 (delaying)              |
+| `kpi-{small,paper}.yaml`           | KPI K1 (heatmap) + K2 (conversion)             |
+| `dfg_prim-{small,paper}.yaml`      | DFG via shared `PrimitiveAccess`               |
+| `variants_prim-{small,paper}.yaml` | trace variants via shared `PrimitiveAccess`    |
+| `strong_rels-ab.yaml`              | DuckDB strong-rels and Kuzu weak comparisons   |
 
 Each matrix cell runs in a separate subprocess and appends JSONL rows to the
 configured `results_path`.
@@ -162,6 +204,9 @@ Only `impl.run()` is timed.
 
 Untimed setup and normalization hooks:
 
+- `prepare` phase: one-time `model.setup()` per (model, dataset) pair
+  (kuzu cache builds, CSV exports, neo4j LOAD CSV) before measurement
+- `model.setup()` inside the cell subprocess: hits the warm cache from above
 - `impl.pre_run(model)`: per-cell preparation, for example Polars OCPQ context setup
 - `pattern.post_process(raw, inputs, model)`: result-shape normalization
 - `canonicalize(raw, schema)`: oracle comparison format
@@ -335,3 +380,31 @@ python scripts/plot_results.py results/ocpq-paper.jsonl
 ```
 
 The script writes PNG and PDF files next to the input JSONL.
+
+## Regenerating the paper tables
+
+`scripts/make_table.py` consumes one or more JSONL files (rows filtered by
+their `pattern` field) and writes the main results table plus an optional
+typing sub-study table.
+
+```bash
+python scripts/make_table.py \
+    --input results/paper-all.jsonl \
+    --output ../paper-overleaf/tables/main.tex \
+    --typing-output ../paper-overleaf/tables/typing.tex
+```
+
+Flags:
+
+- `--input <jsonl> [<jsonl> ...]` -- one or more JSONLs; rows are combined.
+- `--output <path>` -- main table.
+- `--typing-output <path>` -- typing sub-study table (weak vs. strong schemas,
+  with the speedup factor). Same input file as the main table.
+- `--inner-stat {mean,median}` -- within-cell aggregation (default `mean`).
+- `--on-incorrect {drop,include,error}` -- handling of `correct=False` rows.
+- `--no-color`, `--no-bold` -- disable column tinting / winner bold.
+- `--draft-note "..."` -- prepend a red `Draft:` disclaimer to the caption.
+
+Cells without a JSONL row render as `--`; this covers both "unimplemented"
+and "timed out" (the harness kills cells exceeding `cell_timeout_seconds`
+and writes no row).

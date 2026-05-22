@@ -1,0 +1,413 @@
+"""Generate the main-results LaTeX table from ocpm-bench JSONL files.
+
+Accepts one or more combined JSONLs (e.g. `paper-all.jsonl`) via `--input`.
+Rows are filtered by their `pattern` field internally. The typing sub-study
+table is rendered from the same data; no separate `strong_rels-ab.jsonl`
+needed.
+
+Layout (main table):
+  - Leftmost column groups data models by family via \\multirow.
+  - Pattern columns are grouped by family in a two-level header.
+  - Each cell shows mean +/- std across per-instance summaries (the
+    within-cell aggregation defaults to mean of the warm runs; the cold
+    run is already excluded by the harness).
+  - The fastest model per pattern column is bolded; cells are tinted by
+    log-time relative to the column min.
+
+Layout (typing table):
+  - Per engine, one row per pattern with (Weak, Strong, Speedup factor).
+  - Speedup > 1.0 favours strong typing (teal), < 1.0 favours weak (red).
+
+CLI:
+    python make_table.py --input results/paper-all.jsonl \\
+        --output paper-overleaf/tables/main.tex \\
+        --typing-output paper-overleaf/tables/typing.tex
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import statistics
+import sys
+from collections import defaultdict
+from pathlib import Path
+from typing import Callable
+
+MODEL_FAMILIES: list[tuple[str, list[tuple[str, str]]]] = [
+    ("Relational", [("sqlite_mem", "SQLite"), ("duckdb", "DuckDB")]),
+    ("Dataframe",  [("pandas", "Pandas"), ("polars", "Polars")]),
+    ("Graph",      [("kuzu", "Kuzu"), ("neo4j_strong", "Neo4j")]),
+    ("Custom",     [("linked_ocel", "LinkedOCEL")]),
+]
+
+# Each sub-column maps a list of pattern keys to one displayed label.
+PATTERN_FAMILIES: list[tuple[str, list[tuple[list[str], str]]]] = [
+    ("P1: Control flow", [(["dfg"], "DFG"), (["variants"], "Variants")]),
+    ("P2: Queries",      [(["ocpq"], "OCPQ")]),
+    ("P3: OC-Perf",      [(["oc_perf_sync"], "W1"), (["oc_perf_delaying"], "W2")]),
+    ("P4: BI/KPI",       [(["kpi_heatmap"], "K1"), (["kpi_conversion"], "K2")]),
+]
+
+# (Engine label, weak model_key, strong model_key)
+TYPING_PAIRS: list[tuple[str, str, str]] = [
+    ("SQLite", "sqlite_mem", "sqlite_mem_strong_rels"),
+    ("DuckDB", "duckdb",     "duckdb_strong_rels"),
+    ("Kuzu",   "kuzu_weak",  "kuzu"),
+]
+
+TYPING_PATTERNS: list[tuple[str, str]] = [
+    ("dfg", "DFG"),
+    ("variants", "Variants"),
+    ("ocpq", "OCPQ"),
+    ("oc_perf_sync", "W1"),
+    ("oc_perf_delaying", "W2"),
+    ("kpi_heatmap", "K1"),
+    ("kpi_conversion", "K2"),
+]
+
+INNER_STATS: dict[str, Callable[[list[float]], float]] = {
+    "median": statistics.median,
+    "mean": statistics.fmean,
+}
+
+# Heatmap tint range (xcolor percentage). Darker = faster.
+TINT_MIN = 4
+TINT_MAX = 32
+TINT_HUE = "teal"
+
+
+def _load_combined(
+    paths: list[Path], inner_stat: str, on_incorrect: str,
+) -> dict[str, dict[str, list[float]]]:
+    """Combine rows from one or more JSONLs.
+
+    Returns {pattern -> {model -> [per-instance summary ms]}}. Each
+    per-instance value is the inner-stat aggregation of that instance's
+    warm samples (mean by default).
+    """
+    stat_fn = INNER_STATS[inner_stat]
+    by_cell: dict[tuple[str, str, str], list[float]] = defaultdict(list)
+    dropped: list[tuple[str, str, str]] = []
+
+    for path in paths:
+        with path.open() as f:
+            for line in f:
+                row = json.loads(line)
+                pattern = row.get("pattern")
+                model = row.get("model")
+                inst = row.get("instance_id") or "_"
+                warm = row.get("warm_ms") or []
+                if not (pattern and model and warm):
+                    continue
+                if row.get("correct") is False:
+                    key = (model, pattern, inst)
+                    if on_incorrect == "error":
+                        raise SystemExit(
+                            f"refusing to aggregate: incorrect cell {key}"
+                        )
+                    if on_incorrect == "drop":
+                        dropped.append(key)
+                        continue
+                by_cell[(model, pattern, inst)].extend(warm)
+
+    for key in dropped:
+        print(f"warning: dropped incorrect cell {key[0]}/{key[1]}/{key[2]}",
+              file=sys.stderr)
+
+    out: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for (model, pattern, _), samples in by_cell.items():
+        out[pattern][model].append(stat_fn(samples))
+    return {p: dict(m) for p, m in out.items()}
+
+
+def _fmt_num(value: float) -> str:
+    if value < 10:
+        return f"{value:.1f}"
+    rounded = int(round(value))
+    return f"{rounded:,}".replace(",", "\\,")
+
+
+def _aggregate(per_instance: list[float]) -> tuple[float, float | None]:
+    if not per_instance:
+        return float("nan"), None
+    mean = statistics.fmean(per_instance)
+    std = statistics.stdev(per_instance) if len(per_instance) >= 2 else None
+    return mean, std
+
+
+def _tint(value: float, col_min: float, col_max: float) -> int:
+    if col_min == col_max or not math.isfinite(col_min) or col_max <= 0:
+        return TINT_MAX
+    lv = math.log10(max(value, 1e-3))
+    lo = math.log10(max(col_min, 1e-3))
+    hi = math.log10(max(col_max, 1e-3))
+    if hi == lo:
+        return TINT_MAX
+    frac = (lv - lo) / (hi - lo)
+    return int(round(TINT_MAX - frac * (TINT_MAX - TINT_MIN)))
+
+
+def _render_cell(
+    per_instance: list[float], col_min: float, col_max: float,
+    enable_color: bool, enable_bold: bool,
+) -> str:
+    if not per_instance:
+        return "\\multicolumn{1}{c}{--}"
+    mean, _ = _aggregate(per_instance)
+    body = _fmt_num(mean)
+    if enable_bold and mean == col_min:
+        body = f"\\textbf{{{body}}}"
+    if enable_color:
+        body = f"\\cellcolor{{{TINT_HUE}!{_tint(mean, col_min, col_max)}}}{body}"
+    return body
+
+
+def _flat_patterns() -> list[tuple[list[str], str]]:
+    return [pat for _, pats in PATTERN_FAMILIES for pat in pats]
+
+
+def _header_lines() -> list[str]:
+    top: list[str] = ["", ""]
+    cmidrules: list[str] = []
+    col = 3
+    for fam_label, pats in PATTERN_FAMILIES:
+        span = len(pats)
+        if span == 1:
+            top.append(f"\\multicolumn{{1}}{{c}}{{{fam_label}}}")
+        else:
+            top.append(f"\\multicolumn{{{span}}}{{c}}{{{fam_label}}}")
+        if span >= 2:
+            cmidrules.append(f"\\cmidrule(lr){{{col}-{col + span - 1}}}")
+        col += span
+    bottom = ["Family", "Model"]
+    for _, pats in PATTERN_FAMILIES:
+        for _, label in pats:
+            bottom.append(label)
+    return [
+        " & ".join(top) + " \\\\",
+        " ".join(cmidrules),
+        " & ".join(bottom) + " \\\\",
+    ]
+
+
+def build_table(
+    data: dict[str, dict[str, list[float]]],
+    enable_color: bool, enable_bold: bool, draft_note: str | None = None,
+) -> str:
+    pat_cols = _flat_patterns()
+    n_pat = len(pat_cols)
+    col_spec = "@{}ll" + ("r" * n_pat) + "@{}"
+
+    def aggregated(model_key: str, pat_keys: list[str]) -> list[float]:
+        out: list[float] = []
+        for pk in pat_keys:
+            out.extend(data.get(pk, {}).get(model_key, []))
+        return out
+
+    col_min: dict[str, float] = {}
+    col_max: dict[str, float] = {}
+    for pat_keys, label in pat_cols:
+        means: list[float] = []
+        for _, models in MODEL_FAMILIES:
+            for model_key, _ in models:
+                per_inst = aggregated(model_key, pat_keys)
+                if per_inst:
+                    means.append(statistics.fmean(per_inst))
+        col_min[label] = min(means) if means else float("nan")
+        col_max[label] = max(means) if means else float("nan")
+
+    caption_parts: list[str] = []
+    if draft_note:
+        caption_parts.append(
+            r"\textcolor{red}{\textbf{Draft:}} " + draft_note + " "
+        )
+    caption_parts.append(
+        r"Mean wall-clock time (ms) on BPIC17 per model and access pattern. "
+        r"Warm runs only; cold excluded. Per-column fastest is bold, cells "
+        r"log-tinted relative to the column minimum. See "
+        r"\autoref{tab:typing-results} for weak/strong typing."
+    )
+
+    lines = [
+        r"\begin{table}[t]",
+        r"\caption{" + "".join(caption_parts) + r"}\label{tab:main-results}",
+        r"\centering",
+        r"\footnotesize",
+        r"\setlength{\tabcolsep}{2pt}",
+        r"\renewcommand{\arraystretch}{1.15}",
+        r"\begin{tabular*}{\linewidth}{" + col_spec.replace("@{}ll", "@{\\extracolsep{\\fill}}ll", 1) + "}",
+        r"\toprule",
+    ]
+    lines.extend(_header_lines())
+    lines.append(r"\midrule")
+
+    for fam_idx, (fam_label, models) in enumerate(MODEL_FAMILIES):
+        nrows = len(models)
+        for i, (model_key, model_label) in enumerate(models):
+            row_cells: list[str] = []
+            if i == 0:
+                if nrows == 1:
+                    row_cells.append(fam_label)
+                else:
+                    row_cells.append(f"\\multirow{{{nrows}}}{{*}}{{{fam_label}}}")
+            else:
+                row_cells.append("")
+            row_cells.append(model_label)
+            for pat_keys, label in pat_cols:
+                per_inst = aggregated(model_key, pat_keys)
+                row_cells.append(_render_cell(
+                    per_inst, col_min[label], col_max[label],
+                    enable_color=enable_color, enable_bold=enable_bold,
+                ))
+            lines.append(" & ".join(row_cells) + r" \\")
+        if fam_idx < len(MODEL_FAMILIES) - 1:
+            lines.append(r"\midrule")
+
+    lines += [
+        r"\bottomrule",
+        r"\end{tabular*}",
+        r"\end{table}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _speedup_tint(speedup: float) -> tuple[str, int]:
+    if not math.isfinite(speedup) or speedup <= 0:
+        return TINT_HUE, 0
+    delta = abs(math.log10(speedup))
+    intensity = int(round(min(delta * 60, TINT_MAX)))
+    intensity = max(intensity, 0)
+    hue = TINT_HUE if speedup >= 1.0 else "red"
+    return hue, intensity
+
+
+def build_typing_table(
+    data: dict[str, dict[str, list[float]]],
+    enable_color: bool, enable_bold: bool, draft_note: str | None = None,
+) -> str:
+    col_spec = "@{}llrrr@{}"
+
+    lines = [r"\begin{table}[t]"]
+    caption_parts: list[str] = []
+    if draft_note:
+        caption_parts.append(
+            r"\textcolor{red}{\textbf{Draft:}} " + draft_note + " "
+        )
+    caption_parts.append(
+        r"Weak vs.\ strong typing on BPIC17 (ms; mean$\pm$std). Speedup "
+        r"$=\frac{\text{weak}}{\text{strong}}$: $>1.0$ favours strong (teal), "
+        r"$<1.0$ weak (red). Same run as \autoref{tab:main-results}."
+    )
+    lines.append(r"\caption{" + "".join(caption_parts) + r"}\label{tab:typing-results}")
+    lines += [
+        r"\centering",
+        r"\small",
+        r"\setlength{\tabcolsep}{6pt}",
+        r"\renewcommand{\arraystretch}{1.15}",
+        r"\begin{tabular*}{\linewidth}{" + col_spec.replace("@{}ll", "@{\\extracolsep{\\fill}}ll", 1) + "}",
+        r"\toprule",
+        r"Engine & Pattern & \multicolumn{1}{c}{Weak} & \multicolumn{1}{c}{Strong} & \multicolumn{1}{c}{Speedup} \\",
+        r"\midrule",
+    ]
+
+    for pair_idx, (engine_label, weak_key, strong_key) in enumerate(TYPING_PAIRS):
+        nrows = len(TYPING_PATTERNS)
+        for i, (pat_key, pat_label) in enumerate(TYPING_PATTERNS):
+            weak_inst = data.get(pat_key, {}).get(weak_key, [])
+            strong_inst = data.get(pat_key, {}).get(strong_key, [])
+            weak_mean, weak_std = _aggregate(weak_inst) if weak_inst else (float("nan"), None)
+            strong_mean, strong_std = _aggregate(strong_inst) if strong_inst else (float("nan"), None)
+
+            if weak_inst and strong_inst:
+                strong_wins = strong_mean < weak_mean
+                row_min = min(weak_mean, strong_mean)
+                row_max = max(weak_mean, strong_mean)
+                speedup = weak_mean / strong_mean if strong_mean > 0 else float("nan")
+                speedup_str = f"{speedup:.2f}$\\times$"
+                if enable_bold and speedup >= 1.2:
+                    speedup_str = f"\\textbf{{{speedup_str}}}"
+                elif speedup < 0.83:
+                    speedup_str = f"\\textit{{{speedup_str}}}"
+                if enable_color:
+                    hue, intensity = _speedup_tint(speedup)
+                    if intensity > 0:
+                        speedup_str = f"\\cellcolor{{{hue}!{intensity}}}{speedup_str}"
+            else:
+                strong_wins = False
+                row_min = float("nan")
+                row_max = float("nan")
+                speedup_str = "\\multicolumn{1}{c}{--}"
+
+            def fmt_cell(inst: list[float], mean: float, std: float | None, is_winner: bool) -> str:
+                if not inst:
+                    return "\\multicolumn{1}{c}{--}"
+                body = _fmt_num(mean)
+                if std is not None:
+                    body = f"{body}\\,\\textsubscript{{$\\pm\\,{_fmt_num(std)}$}}"
+                if enable_bold and is_winner:
+                    body = f"\\textbf{{{body}}}"
+                if enable_color and math.isfinite(row_min) and math.isfinite(row_max):
+                    body = f"\\cellcolor{{{TINT_HUE}!{_tint(mean, row_min, row_max)}}}{body}"
+                return body
+
+            row_cells: list[str] = []
+            if i == 0:
+                row_cells.append(f"\\multirow{{{nrows}}}{{*}}{{{engine_label}}}")
+            else:
+                row_cells.append("")
+            row_cells.append(pat_label)
+            row_cells.append(fmt_cell(weak_inst, weak_mean, weak_std, bool(weak_inst) and not strong_wins))
+            row_cells.append(fmt_cell(strong_inst, strong_mean, strong_std, bool(strong_inst) and strong_wins))
+            row_cells.append(speedup_str)
+            lines.append(" & ".join(row_cells) + r" \\")
+        if pair_idx < len(TYPING_PAIRS) - 1:
+            lines.append(r"\midrule")
+
+    lines += [r"\bottomrule", r"\end{tabular*}", r"\end{table}"]
+    return "\n".join(lines) + "\n"
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--input", type=Path, nargs="+", required=True,
+                    help="One or more JSONL files; rows are filtered by their `pattern` field.")
+    ap.add_argument("--output", type=Path, required=True,
+                    help="LaTeX output path for the main table.")
+    ap.add_argument("--typing-output", type=Path, default=None,
+                    help="If set, also write the typing sub-study table here.")
+    ap.add_argument("--inner-stat", choices=sorted(INNER_STATS), default="mean")
+    ap.add_argument("--on-incorrect", choices=("drop", "include", "error"), default="drop")
+    ap.add_argument("--no-color", action="store_true")
+    ap.add_argument("--no-bold", action="store_true")
+    ap.add_argument("--draft-note", default=None,
+                    help="If set, prepend a red 'Draft:' disclaimer to the caption.")
+    args = ap.parse_args()
+
+    for p in args.input:
+        if not p.exists():
+            ap.error(f"input not found: {p}")
+
+    data = _load_combined(args.input, args.inner_stat, args.on_incorrect)
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(build_table(
+        data, enable_color=not args.no_color, enable_bold=not args.no_bold,
+        draft_note=args.draft_note,
+    ))
+    print(f"wrote {args.output}")
+    for pat in sorted(data):
+        print(f"  {pat:14s}: {sorted(data[pat])}")
+
+    if args.typing_output is not None:
+        args.typing_output.parent.mkdir(parents=True, exist_ok=True)
+        args.typing_output.write_text(build_typing_table(
+            data, enable_color=not args.no_color, enable_bold=not args.no_bold,
+            draft_note=args.draft_note,
+        ))
+        print(f"wrote {args.typing_output}")
+
+
+if __name__ == "__main__":
+    main()

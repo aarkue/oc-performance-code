@@ -26,3 +26,11 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 docker-compose.yaml
+
+# Apptainer artifacts (not needed for Docker build)
+*.sif
+Apptainer.def
+
+# Local caches
+.pytest_cache/
+.ruff_cache/
