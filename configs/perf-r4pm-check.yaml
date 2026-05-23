@@ -1,28 +1,25 @@
-# Small-scale OC-performance run on BPIC17.
-# W1 = oc_perf_sync (mean per-event sync time per activity)
-# W2 = oc_perf_delaying (counts of latest-predecessor (activity, object type) pairs)
+# Correctness-only: all engines vs linked_ocel oracle for P3 (W1, W2).
 
 repetitions: 1
 matrix_passes: 1
 randomize_cell_order: false
-results_path: results/perf-small.jsonl
-cell_timeout_seconds: 900  # 15 minutes per cell; timed-out cells produce no row
+results_path: results/perf-r4pm-check.jsonl
+cell_timeout_seconds: 900
+allow_incorrect: true
 
 cells:
   # W1
-  - { model: linked_ocel,  pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: duckdb,       pattern: oc_perf_sync,     dataset: bpic17 }
+  - { model: linked_ocel,  pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: kuzu,         pattern: oc_perf_sync,     dataset: bpic17 }
-  - { model: neo4j_strong, pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: polars,       pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: pandas,       pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: sqlite_mem,   pattern: oc_perf_sync,     dataset: bpic17 }
 
   # W2
-  - { model: linked_ocel,  pattern: oc_perf_delaying, dataset: bpic17 }
   - { model: duckdb,       pattern: oc_perf_delaying, dataset: bpic17 }
+  - { model: linked_ocel,  pattern: oc_perf_delaying, dataset: bpic17 }
   - { model: kuzu,         pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: neo4j_strong, pattern: oc_perf_delaying, dataset: bpic17 }
   - { model: polars,       pattern: oc_perf_delaying, dataset: bpic17 }
   - { model: pandas,       pattern: oc_perf_delaying, dataset: bpic17 }
   - { model: sqlite_mem,   pattern: oc_perf_delaying, dataset: bpic17 }

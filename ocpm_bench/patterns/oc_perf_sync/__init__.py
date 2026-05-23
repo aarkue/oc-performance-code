@@ -30,11 +30,19 @@ def _instances(_dataset) -> list[tuple[str, Any]]:
     return [("W1", None)]
 
 
+def _post_process(raw, _inputs, model):
+    if model.name in ("kuzu", "neo4j_strong"):
+        translate = model.original_name
+        return [(translate(act), total, count) for act, total, count in raw]
+    return raw
+
+
 CONTRACT = PatternContract(
     name="oc_perf_sync",
     output=_OUTPUT,
     instances=_instances,
-    oracle_model="duckdb",
+    oracle_model="linked_ocel",
+    post_process=_post_process,
 )
 
 registry.register_pattern(CONTRACT)

@@ -25,10 +25,30 @@ JOB_TAG="${SLURM_JOB_ID:-$(date +%s)}"
 OUT_DIR="$PROJECT_DIR/results-$JOB_TAG"
 RUN_DIR="/tmp/run-$JOB_TAG"
 
-[[ -f "$SIF" ]] || { echo "SIF not found: $SIF" >&2; exit 2; }
-mkdir -p "$RUN_DIR"/{neo4j-data,neo4j-import,results} "$OUT_DIR" "$CACHE_DIR"
+# Per-job private cache: DuckDB/Kuzu take exclusive file locks, so concurrent
+# jobs sharing CACHE_DIR collide. Each job gets its own copy on /tmp; new
+# payloads sync back under flock for later jobs.
+JOB_CACHE="$RUN_DIR/cache"
 
-trap 'cp -r "$RUN_DIR/results/." "$OUT_DIR/" 2>/dev/null || true' EXIT
+[[ -f "$SIF" ]] || { echo "SIF not found: $SIF" >&2; exit 2; }
+mkdir -p "$RUN_DIR"/{neo4j-data,neo4j-import,results} "$OUT_DIR" "$CACHE_DIR" "$JOB_CACHE"
+
+if compgen -G "$CACHE_DIR/*" > /dev/null; then
+  echo "[run-apptainer] seeding job cache from $CACHE_DIR"
+  cp -a --reflink=auto "$CACHE_DIR/." "$JOB_CACHE/"
+fi
+
+_sync_results() {
+  cp -r "$RUN_DIR/results/." "$OUT_DIR/" 2>/dev/null || true
+}
+
+_sync_cache_back() {
+  [[ -d "$JOB_CACHE" ]] || return 0
+  ( flock -x 9 && cp -an "$JOB_CACHE/." "$CACHE_DIR/" 2>/dev/null || true ) \
+    9> "$CACHE_DIR/.sync.lock"
+}
+
+trap '_sync_results; _sync_cache_back' EXIT
 
 {
   echo "host=$(hostname) job=$JOB_TAG config=$CONFIG threads=$N_THREADS"
@@ -62,7 +82,7 @@ taskset -c "$TASKSET_CPUS" \
     --bind "$RUN_DIR/neo4j-data:/data" \
     --bind "$RUN_DIR/neo4j-import:/var/lib/neo4j/import" \
     --bind "$RUN_DIR/results:/app/results" \
-    --bind "$CACHE_DIR:/app/cache" \
+    --bind "$JOB_CACHE:/app/cache" \
     "$SIF" matrix --prepare --spec "configs/$CONFIG"
 
 echo "results: $OUT_DIR"

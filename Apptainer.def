@@ -42,7 +42,7 @@ From: neo4j:5
     uv venv /opt/venv --python 3.14
     . /opt/venv/bin/activate
     uv pip install -e ".[dev]"
-    uv pip install --prerelease=allow "r4pm[polars]==0.5.5a2"
+    uv pip install --prerelease=allow "r4pm[polars]==0.5.5a3"
 
 %environment
     export PATH=/opt/venv/bin:/usr/local/bin:$PATH

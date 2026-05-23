@@ -1,10 +1,10 @@
-# Combined paper matrix: all patterns x all engines.
+# Small variant of paper-all.yaml: all patterns x all engines, single rep.
 
-repetitions: 10
+repetitions: 1
 matrix_passes: 1
-randomize_cell_order: true
-cell_timeout_seconds: 3600
-results_path: results/paper-all.jsonl
+randomize_cell_order: false
+cell_timeout_seconds: 300
+results_path: results/paper-small.jsonl
 
 cells:
   # DFG

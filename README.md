@@ -216,6 +216,36 @@ Result rows include warm samples, one cold sample, the model's reported
 process `rss_bytes_after_setup`. RSS is a process-level memory signal, not a
 pure model-size measurement.
 
+### Known measurement limitations
+
+- **`model_bytes` is not cross-engine comparable.** Each engine returns a
+  different concept under the same field name: on-disk DB file/dir size for
+  `duckdb`/`kuzu`/`neo4j_strong`, in-memory page bytes for `sqlite_mem`
+  (`:memory:`), in-RAM frame footprint for `pandas`/`polars`, and the source
+  OCEL file size for `linked_ocel` (not its in-process Rust structure).
+- **RSS excludes the Neo4j server.** `rss_bytes_after_setup` is the Python
+  process RSS only. For embedded engines it includes the engine; for
+  `neo4j_strong`, which runs in a separate JVM/container, it excludes the
+  actual storage. A unified container-level RSS would be needed for an
+  apples-to-apples comparison.
+- **RSS is contaminated for `kuzu`/`kuzu_weak`/`neo4j_strong`.**
+  `_build_name_info` calls `r4pm.import_item("SlimLinkedOCEL", ...)` for
+  type-name discovery and then `remove_item`s it; the allocator typically
+  does not return pages to the OS, so the released ~1.8 GB sticks in RSS.
+  Reported RSS therefore overstates these engines' true memory cost by
+  roughly that amount.
+- **One cold sample per cell.** Cold-vs-warm is informative only after
+  cross-cell aggregation; individual cell cold/warm ratios are noisy.
+
+Potential extensions:
+
+- Replace `model_bytes` with a single uniform metric (container/process RSS
+  delta, or in-memory bytes measured from outside the engine's API).
+- Move the `_build_name_info` r4pm call into the subprocess `prepare` phase
+  so it does not pollute the engine RSS measurement.
+- Capture multiple cold samples per cell (fresh subprocess per sample) for a
+  proper cold-start distribution rather than a single point per cell.
+
 Pattern outputs are compared against the LinkedOCEL oracle unless the pattern
 declares another oracle model. Paper runs fail on incorrect cells by default.
 Use `--allow-incorrect` or `allow_incorrect: true` only for exploratory runs.

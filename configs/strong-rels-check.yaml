@@ -1,0 +1,25 @@
+# Correctness-only: duckdb_strong_rels + kuzu_weak vs linked_ocel oracle (W1, W2, K1, K2).
+
+repetitions: 1
+matrix_passes: 1
+randomize_cell_order: false
+results_path: results/strong-rels-check.jsonl
+cell_timeout_seconds: 900
+allow_incorrect: true
+
+cells:
+  - { model: linked_ocel,             pattern: oc_perf_sync,     dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: oc_perf_sync,     dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: oc_perf_sync,     dataset: bpic17 }
+
+  - { model: linked_ocel,             pattern: oc_perf_delaying, dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: oc_perf_delaying, dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: oc_perf_delaying, dataset: bpic17 }
+
+  - { model: linked_ocel,             pattern: kpi_heatmap,      dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: kpi_heatmap,      dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: kpi_heatmap,      dataset: bpic17 }
+
+  - { model: linked_ocel,             pattern: kpi_conversion,   dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: kpi_conversion,   dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: kpi_conversion,   dataset: bpic17 }

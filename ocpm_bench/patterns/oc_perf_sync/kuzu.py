@@ -1,10 +1,7 @@
-"""W1 via Kuzu (strong + weak): per-object COLLECT + per-event span.
+"""W1 via Kuzu (strong + weak).
 
-Kuzu rejects multi-stage aggregation in a single query
-(`Expression contains nested aggregation`), so the per-event span is
-returned as a flat list `(activity, span_seconds)` and aggregated in
-Python (Counter-style sum/count). The per-activity aggregation step is
-negligible compared with the per-object COLLECT + LAG-style index.
+Kuzu rejects nested aggregation, so per-event predecessor timestamps are
+emitted as flat rows and aggregated (min/max -> span) in Python.
 """
 
 from __future__ import annotations
@@ -23,13 +20,11 @@ WITH o,
      COLLECT(e.id) AS eids,
      COLLECT(e.time) AS times,
      COLLECT(LABEL(e)) AS types
-UNWIND range(1, size(eids) - 1) AS i
-WITH eids[i] AS eid, types[i] AS activity, times[i - 1] AS pred_t
-LIMIT 9223372036854775807
-WITH eid, activity, to_epoch_ms(pred_t) AS pred_ms
-LIMIT 9223372036854775807
-WITH eid, activity, MAX(pred_ms) AS ms_max, MIN(pred_ms) AS ms_min
-RETURN activity, CAST((ms_max - ms_min) / 1000 AS INT64) AS span_s
+UNWIND range(2, size(eids)) AS i
+RETURN eids[i] AS eid,
+       types[i] AS activity,
+       (to_epoch_ms(times[i - 1]) / 1000) * 1000000
+         + (date_part('microsecond', times[i - 1]) % 1000000) AS pred_us
 """
 
 _WEAK_CYPHER = """
@@ -40,13 +35,11 @@ WITH o,
      COLLECT(e.id) AS eids,
      COLLECT(e.time) AS times,
      COLLECT(e.type) AS types
-UNWIND range(1, size(eids) - 1) AS i
-WITH eids[i] AS eid, types[i] AS activity, times[i - 1] AS pred_t
-LIMIT 9223372036854775807
-WITH eid, activity, to_epoch_ms(pred_t) AS pred_ms
-LIMIT 9223372036854775807
-WITH eid, activity, MAX(pred_ms) AS ms_max, MIN(pred_ms) AS ms_min
-RETURN activity, CAST((ms_max - ms_min) / 1000 AS INT64) AS span_s
+UNWIND range(2, size(eids)) AS i
+RETURN eids[i] AS eid,
+       types[i] AS activity,
+       (to_epoch_ms(times[i - 1]) / 1000) * 1000000
+         + (date_part('microsecond', times[i - 1]) % 1000000) AS pred_us
 """
 
 
@@ -61,11 +54,25 @@ def run(model, _inputs) -> list[tuple[str, int, int]]:
                 "event_labels": model._event_labels,
             },
         )
+    per_event_min: dict[str, int] = {}
+    per_event_max: dict[str, int] = {}
+    per_event_act: dict[str, str] = {}
+    for eid, activity, pred_us in rows:
+        if eid in per_event_min:
+            if pred_us < per_event_min[eid]:
+                per_event_min[eid] = pred_us
+            if pred_us > per_event_max[eid]:
+                per_event_max[eid] = pred_us
+        else:
+            per_event_min[eid] = pred_us
+            per_event_max[eid] = pred_us
+            per_event_act[eid] = activity
     totals: dict[str, int] = defaultdict(int)
     counts: dict[str, int] = defaultdict(int)
-    for activity, span_s in rows:
-        totals[activity] += int(span_s)
-        counts[activity] += 1
+    for eid, act in per_event_act.items():
+        span_s = (per_event_max[eid] - per_event_min[eid]) // 1_000_000
+        totals[act] += span_s
+        counts[act] += 1
     return [(str(a), totals[a], counts[a]) for a in totals]
 
 

@@ -94,9 +94,12 @@ def pre_run(model) -> None:
 
 
 def run(model, _inputs) -> list[tuple[str, int, int]]:
+    union_cte = getattr(model, "_union_cte", None) or build_event_times_union(
+        model.execute_sql
+    )
     is_sqlite = model.name.startswith("sqlite")
     template = _W1_SQL_SQLITE if is_sqlite else _W1_SQL_DUCKDB
-    sql = template.format(union_cte=model._union_cte)
+    sql = template.format(union_cte=union_cte)
     rows = model.execute_sql(sql)
     return [(str(a), int(t), int(c)) for a, t, c in rows]
 

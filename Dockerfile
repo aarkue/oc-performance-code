@@ -25,7 +25,7 @@ COPY pyproject.toml uv.lock ./
 COPY ocpm_bench ./ocpm_bench
 RUN uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.14 \
  && uv pip install -e ".[dev]" \
- && uv pip install --prerelease=allow "r4pm[polars]==0.5.5a2"
+ && uv pip install --prerelease=allow "r4pm[polars]==0.5.5a3"
 
 # Layer 2: project assets (changes more often, kept separate from heavy install layer).
 COPY configs ./configs

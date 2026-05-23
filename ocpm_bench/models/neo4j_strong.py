@@ -20,7 +20,7 @@ from ocpm_bench.datasets.base import Dataset
 from ocpm_bench.harness import cache as _cache
 from ocpm_bench.harness import registry
 from ocpm_bench.models._versions import package_version, python_version
-from ocpm_bench.models.kuzu import _export_typed, _build_name_info, path_size
+from ocpm_bench.models.kuzu import _build_name_info, _export_typed, path_size
 from ocpm_bench.models.primitives import clean_type_name, normalize_timestamp
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -142,17 +142,19 @@ class Neo4jModelStrong:
             export=lambda out: _run_kuzu_csv_export(kuzu_path, out),
         )
 
-        # Marker freshness keys on the OCEL source fingerprint only; pointing
-        # at a different Neo4j instance requires `cache clean --model neo4j_strong`.
-        _cache.get_or_export(
-            dataset=dataset.name,
-            model=self.name,
-            source=src,
-            payload_name=f"{dataset.name}-strong-loaded.marker",
-            export=lambda marker: self._wipe_and_load(csv_dir, marker),
-        )
+        if self._needs_load():
+            self._wipe_and_load(csv_dir)
 
         self._name_map, self._ev_types, self._ob_types = _build_name_info(str(src))
+
+    def _needs_load(self) -> bool:
+        try:
+            rows = self.execute_cypher(
+                "MATCH ()-[r:E2O]->() RETURN count(r) AS n"
+            )
+        except Exception:
+            return True
+        return not rows or rows[0][0] == 0
 
     def teardown(self) -> None:
         if self._driver is not None:
@@ -207,7 +209,7 @@ class Neo4jModelStrong:
     def get_event_types(self) -> list[str]:
         return list(self._ev_types)
 
-    def _wipe_and_load(self, csv_dir: Path, marker_path: Path) -> None:
+    def _wipe_and_load(self, csv_dir: Path) -> None:
         import json as _json
 
         assert self._import_dir is not None
@@ -266,8 +268,6 @@ class Neo4jModelStrong:
                     p.unlink()
                 except OSError:
                     pass
-
-        marker_path.write_text("ok\n")
 
     def get_object_types(self) -> list[str]:
         return list(self._ob_types)

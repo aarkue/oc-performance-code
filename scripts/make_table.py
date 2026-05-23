@@ -15,8 +15,10 @@ Layout (main table):
     log-time relative to the column min.
 
 Layout (typing table):
-  - Per engine, one row per pattern with (Weak, Strong, Speedup factor).
+  - Compact 3xN matrix: rows are engines, columns are corpora, cells are
+    the geometric mean of weak/strong speedups across the corpus's patterns.
   - Speedup > 1.0 favours strong typing (teal), < 1.0 favours weak (red).
+  - Bold marks |effect| >= 20%; raw ms lives in the main table.
 
 CLI:
     python make_table.py --input results/paper-all.jsonl \\
@@ -39,14 +41,15 @@ MODEL_FAMILIES: list[tuple[str, list[tuple[str, str]]]] = [
     ("Relational", [("sqlite_mem", "SQLite"), ("duckdb", "DuckDB")]),
     ("Dataframe",  [("pandas", "Pandas"), ("polars", "Polars")]),
     ("Graph",      [("kuzu", "Kuzu"), ("neo4j_strong", "Neo4j")]),
-    ("Custom",     [("linked_ocel", "LinkedOCEL")]),
+    ("Custom",     [("linked_ocel", "Rust4PM")]),
 ]
 
-# Each sub-column maps a list of pattern keys to one displayed label.
+# Each sub-column maps one or more pattern keys to one displayed label;
+# patterns sharing a label are pooled before per-cell aggregation.
 PATTERN_FAMILIES: list[tuple[str, list[tuple[list[str], str]]]] = [
     ("P1: Control flow", [(["dfg"], "DFG"), (["variants"], "Variants")]),
     ("P2: Queries",      [(["ocpq"], "OCPQ")]),
-    ("P3: OC-Perf",      [(["oc_perf_sync"], "W1"), (["oc_perf_delaying"], "W2")]),
+    ("P3: OC-Perf",      [(["oc_perf_sync", "oc_perf_delaying"], "OC-Perf")]),
     ("P4: BI/KPI",       [(["kpi_heatmap"], "K1"), (["kpi_conversion"], "K2")]),
 ]
 
@@ -57,24 +60,14 @@ TYPING_PAIRS: list[tuple[str, str, str]] = [
     ("Kuzu",   "kuzu_weak",  "kuzu"),
 ]
 
-TYPING_PATTERNS: list[tuple[str, str]] = [
-    ("dfg", "DFG"),
-    ("variants", "Variants"),
-    ("ocpq", "OCPQ"),
-    ("oc_perf_sync", "W1"),
-    ("oc_perf_delaying", "W2"),
-    ("kpi_heatmap", "K1"),
-    ("kpi_conversion", "K2"),
-]
-
 INNER_STATS: dict[str, Callable[[list[float]], float]] = {
     "median": statistics.median,
     "mean": statistics.fmean,
 }
 
 # Heatmap tint range (xcolor percentage). Darker = faster.
-TINT_MIN = 4
-TINT_MAX = 32
+TINT_MIN = 0
+TINT_MAX = 55
 TINT_HUE = "teal"
 
 
@@ -123,10 +116,7 @@ def _load_combined(
 
 
 def _fmt_num(value: float) -> str:
-    if value < 10:
-        return f"{value:.1f}"
-    rounded = int(round(value))
-    return f"{rounded:,}".replace(",", "\\,")
+    return f"{value:.1f}"
 
 
 def _aggregate(per_instance: list[float]) -> tuple[float, float | None]:
@@ -178,8 +168,7 @@ def _header_lines() -> list[str]:
             top.append(f"\\multicolumn{{1}}{{c}}{{{fam_label}}}")
         else:
             top.append(f"\\multicolumn{{{span}}}{{c}}{{{fam_label}}}")
-        if span >= 2:
-            cmidrules.append(f"\\cmidrule(lr){{{col}-{col + span - 1}}}")
+        cmidrules.append(f"\\cmidrule(lr){{{col}-{col + span - 1}}}")
         col += span
     bottom = ["Family", "Model"]
     for _, pats in PATTERN_FAMILIES:
@@ -225,8 +214,9 @@ def build_table(
         )
     caption_parts.append(
         r"Mean wall-clock time (ms) on BPIC17 per model and access pattern. "
-        r"Warm runs only; cold excluded. Per-column fastest is bold, cells "
-        r"log-tinted relative to the column minimum. See "
+        r"Warm runs only; cold excluded. Per-column fastest is bold; cell "
+        r"shade proportional to log-speedup over column slowest "
+        r"(darker = faster within column). See "
         r"\autoref{tab:typing-results} for weak/strong typing."
     )
 
@@ -287,7 +277,8 @@ def build_typing_table(
     data: dict[str, dict[str, list[float]]],
     enable_color: bool, enable_bold: bool, draft_note: str | None = None,
 ) -> str:
-    col_spec = "@{}llrrr@{}"
+    corpora = _flat_patterns()
+    col_spec = "@{}l" + ("r" * len(corpora)) + "@{}"
 
     lines = [r"\begin{table}[t]"]
     caption_parts: list[str] = []
@@ -296,74 +287,52 @@ def build_typing_table(
             r"\textcolor{red}{\textbf{Draft:}} " + draft_note + " "
         )
     caption_parts.append(
-        r"Weak vs.\ strong typing on BPIC17 (ms; mean$\pm$std). Speedup "
-        r"$=\frac{\text{weak}}{\text{strong}}$: $>1.0$ favours strong (teal), "
-        r"$<1.0$ weak (red). Same run as \autoref{tab:main-results}."
+        r"Speedup of strong over weak typing on BPIC17 "
+        r"($\text{weak ms}/\text{strong ms}$): $>1.0$ favours strong (teal), "
+        r"$<1.0$ favours weak (red); bold marks effects $\geq$20\%. "
+        r"Per-corpus speedup is the geometric mean over its constituent "
+        r"patterns. \autoref{tab:main-results} reports the weak variant for "
+        r"SQLite and DuckDB and the strong variant for Kuzu."
     )
     lines.append(r"\caption{" + "".join(caption_parts) + r"}\label{tab:typing-results}")
     lines += [
         r"\centering",
-        r"\small",
-        r"\setlength{\tabcolsep}{6pt}",
+        r"\footnotesize",
+        r"\setlength{\tabcolsep}{3pt}",
         r"\renewcommand{\arraystretch}{1.15}",
-        r"\begin{tabular*}{\linewidth}{" + col_spec.replace("@{}ll", "@{\\extracolsep{\\fill}}ll", 1) + "}",
+        r"\begin{tabular*}{\linewidth}{" + col_spec.replace("@{}l", "@{\\extracolsep{\\fill}}l", 1) + "}",
         r"\toprule",
-        r"Engine & Pattern & \multicolumn{1}{c}{Weak} & \multicolumn{1}{c}{Strong} & \multicolumn{1}{c}{Speedup} \\",
+        "Engine & " + " & ".join(label for _, label in corpora) + r" \\",
         r"\midrule",
     ]
 
-    for pair_idx, (engine_label, weak_key, strong_key) in enumerate(TYPING_PAIRS):
-        nrows = len(TYPING_PATTERNS)
-        for i, (pat_key, pat_label) in enumerate(TYPING_PATTERNS):
-            weak_inst = data.get(pat_key, {}).get(weak_key, [])
-            strong_inst = data.get(pat_key, {}).get(strong_key, [])
-            weak_mean, weak_std = _aggregate(weak_inst) if weak_inst else (float("nan"), None)
-            strong_mean, strong_std = _aggregate(strong_inst) if strong_inst else (float("nan"), None)
-
-            if weak_inst and strong_inst:
-                strong_wins = strong_mean < weak_mean
-                row_min = min(weak_mean, strong_mean)
-                row_max = max(weak_mean, strong_mean)
-                speedup = weak_mean / strong_mean if strong_mean > 0 else float("nan")
-                speedup_str = f"{speedup:.2f}$\\times$"
-                if enable_bold and speedup >= 1.2:
-                    speedup_str = f"\\textbf{{{speedup_str}}}"
-                elif speedup < 0.83:
-                    speedup_str = f"\\textit{{{speedup_str}}}"
-                if enable_color:
-                    hue, intensity = _speedup_tint(speedup)
-                    if intensity > 0:
-                        speedup_str = f"\\cellcolor{{{hue}!{intensity}}}{speedup_str}"
-            else:
-                strong_wins = False
-                row_min = float("nan")
-                row_max = float("nan")
-                speedup_str = "\\multicolumn{1}{c}{--}"
-
-            def fmt_cell(inst: list[float], mean: float, std: float | None, is_winner: bool) -> str:
-                if not inst:
-                    return "\\multicolumn{1}{c}{--}"
-                body = _fmt_num(mean)
-                if std is not None:
-                    body = f"{body}\\,\\textsubscript{{$\\pm\\,{_fmt_num(std)}$}}"
-                if enable_bold and is_winner:
-                    body = f"\\textbf{{{body}}}"
-                if enable_color and math.isfinite(row_min) and math.isfinite(row_max):
-                    body = f"\\cellcolor{{{TINT_HUE}!{_tint(mean, row_min, row_max)}}}{body}"
-                return body
-
-            row_cells: list[str] = []
-            if i == 0:
-                row_cells.append(f"\\multirow{{{nrows}}}{{*}}{{{engine_label}}}")
-            else:
-                row_cells.append("")
-            row_cells.append(pat_label)
-            row_cells.append(fmt_cell(weak_inst, weak_mean, weak_std, bool(weak_inst) and not strong_wins))
-            row_cells.append(fmt_cell(strong_inst, strong_mean, strong_std, bool(strong_inst) and strong_wins))
-            row_cells.append(speedup_str)
-            lines.append(" & ".join(row_cells) + r" \\")
-        if pair_idx < len(TYPING_PAIRS) - 1:
-            lines.append(r"\midrule")
+    for engine_label, weak_key, strong_key in TYPING_PAIRS:
+        row_cells: list[str] = [engine_label]
+        for pat_keys, _ in corpora:
+            ratios: list[float] = []
+            for pat_key in pat_keys:
+                weak_inst = data.get(pat_key, {}).get(weak_key, [])
+                strong_inst = data.get(pat_key, {}).get(strong_key, [])
+                if not weak_inst or not strong_inst:
+                    continue
+                weak_mean, _ = _aggregate(weak_inst)
+                strong_mean, _ = _aggregate(strong_inst)
+                if not (strong_mean > 0 and weak_mean > 0):
+                    continue
+                ratios.append(weak_mean / strong_mean)
+            if not ratios:
+                row_cells.append(r"\multicolumn{1}{c}{--}")
+                continue
+            speedup = math.exp(statistics.fmean(math.log(r) for r in ratios))
+            cell = f"{speedup:.2f}$\\times$"
+            if enable_bold and (speedup >= 1.2 or speedup < 1 / 1.2):
+                cell = f"\\textbf{{{cell}}}"
+            if enable_color:
+                hue, intensity = _speedup_tint(speedup)
+                if intensity > 0:
+                    cell = f"\\cellcolor{{{hue}!{intensity}}}{cell}"
+            row_cells.append(cell)
+        lines.append(" & ".join(row_cells) + r" \\")
 
     lines += [r"\bottomrule", r"\end{tabular*}", r"\end{table}"]
     return "\n".join(lines) + "\n"

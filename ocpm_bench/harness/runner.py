@@ -30,7 +30,7 @@ def _format_diff(got, want, schema, limit: int = 10) -> str:
         lines.extend(f"    {r!r}" for r in only_want)
         return "\n".join(lines)
     if schema.kind == "tuple_list_ordered":
-        for i, (a, b) in enumerate(zip(got, want)):
+        for i, (a, b) in enumerate(zip(got, want)):  # noqa: B905
             if a != b:
                 return (
                     f"  length: got={len(got)} want={len(want)}; first "

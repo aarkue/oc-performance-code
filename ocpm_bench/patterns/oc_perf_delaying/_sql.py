@@ -57,7 +57,10 @@ def pre_run(model) -> None:
 
 
 def run(model, _inputs) -> list[tuple[str, str, int]]:
-    sql = _W2_SQL.format(union_cte=model._union_cte)
+    union_cte = getattr(model, "_union_cte", None) or build_event_times_union(
+        model.execute_sql
+    )
+    sql = _W2_SQL.format(union_cte=union_cte)
     rows = model.execute_sql(sql)
     return [(str(a), str(t), int(c)) for a, t, c in rows]
 

@@ -1,9 +1,8 @@
-"""W2 via Kuzu (strong + weak): per-event argmax + Python count.
+"""W2 via Kuzu (strong + weak).
 
-Kuzu rejects nested aggregation (`COUNT(*)` over a column derived from
-`COLLECT(...)`), so the per-event winning df-edge is emitted as a flat
-list of `(pred_activity, object_type)` rows; Python aggregates the
-counts.
+Kuzu rejects nested aggregation over COLLECT-derived values, so the query
+emits per-df-edge rows and Python picks the latest predecessor per event
+(tie-break: object ocel_id ascending) and aggregates.
 """
 
 from __future__ import annotations
@@ -22,16 +21,13 @@ WITH o,
      COLLECT(e.id) AS eids,
      COLLECT(e.time) AS times,
      COLLECT(LABEL(e)) AS types
-UNWIND range(1, size(eids) - 1) AS i
-WITH eids[i] AS eid,
-     times[i - 1] AS pred_t,
-     types[i - 1] AS pred_activity,
-     o.id AS o_id,
-     LABEL(o) AS o_type
-ORDER BY pred_t DESC, o_id ASC
-LIMIT 9223372036854775807
-WITH eid, COLLECT(pred_activity) AS acts, COLLECT(o_type) AS otypes
-RETURN acts[0] AS pred_activity, otypes[0] AS o_type
+UNWIND range(2, size(eids)) AS i
+RETURN eids[i] AS eid,
+       (to_epoch_ms(times[i - 1]) / 1000) * 1000000
+         + (date_part('microsecond', times[i - 1]) % 1000000) AS pred_us,
+       types[i - 1] AS pred_activity,
+       o.id AS o_id,
+       LABEL(o) AS o_type
 """
 
 _WEAK_CYPHER = """
@@ -42,16 +38,13 @@ WITH o,
      COLLECT(e.id) AS eids,
      COLLECT(e.time) AS times,
      COLLECT(e.type) AS types
-UNWIND range(1, size(eids) - 1) AS i
-WITH eids[i] AS eid,
-     times[i - 1] AS pred_t,
-     types[i - 1] AS pred_activity,
-     o.id AS o_id,
-     o.type AS o_type
-ORDER BY pred_t DESC, o_id ASC
-LIMIT 9223372036854775807
-WITH eid, COLLECT(pred_activity) AS acts, COLLECT(o_type) AS otypes
-RETURN acts[0] AS pred_activity, otypes[0] AS o_type
+UNWIND range(2, size(eids)) AS i
+RETURN eids[i] AS eid,
+       (to_epoch_ms(times[i - 1]) / 1000) * 1000000
+         + (date_part('microsecond', times[i - 1]) % 1000000) AS pred_us,
+       types[i - 1] AS pred_activity,
+       o.id AS o_id,
+       o.type AS o_type
 """
 
 
@@ -66,8 +59,20 @@ def run(model, _inputs) -> list[tuple[str, str, int]]:
                 "event_labels": model._event_labels,
             },
         )
-    counts = Counter((str(a), str(t)) for a, t in rows)
-    return [(a, t, c) for (a, t), c in counts.items()]
+    # Per-event argmax: maximise pred_us; tie-break on o_id ascending.
+    best: dict[str, tuple[int, str, str, str]] = {}
+    for eid, pred_us, pred_activity, o_id, o_type in rows:
+        cand = (pred_us, o_id, pred_activity, o_type)
+        cur = best.get(eid)
+        if cur is None:
+            best[eid] = cand
+        else:
+            if pred_us > cur[0] or (pred_us == cur[0] and o_id < cur[1]):
+                best[eid] = cand
+    counts: Counter[tuple[str, str]] = Counter()
+    for _eid, (_pt, _oid, pred_activity, o_type) in best.items():
+        counts[(pred_activity, o_type)] += 1
+    return [(str(a), str(t), c) for (a, t), c in counts.items()]
 
 
 registry.register_impl("oc_perf_delaying", "kuzu", sys.modules[__name__])

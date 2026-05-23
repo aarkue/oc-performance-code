@@ -30,8 +30,8 @@ def run(model: PandasModel, _inputs) -> list[tuple[str, str, int]]:
         .reset_index(name="count")
     )
     return [
-        (str(r["pred_activity"]), str(r["ocel:type"]), int(r["count"]))
-        for _, r in out.iterrows()
+        (str(a), str(t), int(c))
+        for a, t, c in out.itertuples(index=False, name=None)
     ]
 
 
