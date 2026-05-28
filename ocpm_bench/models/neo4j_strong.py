@@ -38,6 +38,22 @@ def _q_delete_relations() -> str:
 def _q_delete_nodes() -> str:
     return "MATCH (n) CALL (n) { DELETE n } IN TRANSACTIONS OF 1000 ROWS;"
 
+def _q_materialize_df_relations(object_type: str) -> str:
+    return f"""
+        MATCH ( n : `{object_type}` )"
+
+        CALL (n) {{
+            MATCH ( n ) <-[:E2O]- ( e )
+       
+            WITH n , e as nodes ORDER BY e.timestamp,elementId(e)
+            WITH n , collect ( nodes ) as nodeList
+            UNWIND range(0,size(nodeList)-2) AS i
+            WITH n , nodeList[i] as first, nodeList[i+1] as second
+
+            MERGE ( first ) -[df:DF {{ id:n.id, EntityType: '`{object_type}`' }}]->( second )
+        }} IN TRANSACTIONS OF 1000 ROWS;
+    """
+
 
 def _q_load_csv_as_nodes(file_name: str, header: list[str], node_label: str) -> str:
     parts: list[str] = []
@@ -262,6 +278,11 @@ class Neo4jModelStrong:
                             csv_file.name, pair["src"], pair["dst"], rel_label
                         )
                     )
+
+            # materiali DF relations
+            for o_type in self._ob_types:
+                self._run_write(_q_materialize_df_relations(o_type))
+
         finally:
             for p in loaded:
                 try:
