@@ -39,19 +39,24 @@ def _q_delete_nodes() -> str:
     return "MATCH (n) CALL (n) { DELETE n } IN TRANSACTIONS OF 1000 ROWS;"
 
 def _q_materialize_df_relations(object_type: str) -> str:
+    if object_type == "Case_R":
+        _row_num = 10
+    else:
+        _row_num = 1000
+
     return f"""
         MATCH ( n : `{object_type}` )"
 
         CALL (n) {{
             MATCH ( n ) <-[:E2O]- ( e )
        
-            WITH n , e as nodes ORDER BY e.timestamp,elementId(e)
+            WITH n , e as nodes ORDER BY e.time,elementId(e) ASC
             WITH n , collect ( nodes ) as nodeList
             UNWIND range(0,size(nodeList)-2) AS i
             WITH n , nodeList[i] as first, nodeList[i+1] as second
 
             MERGE ( first ) -[df:DF {{ id:n.id, EntityType: '`{object_type}`' }}]->( second )
-        }} IN TRANSACTIONS OF 1000 ROWS;
+        }} IN TRANSACTIONS OF `{_row_num}` ROWS;
     """
 
 
