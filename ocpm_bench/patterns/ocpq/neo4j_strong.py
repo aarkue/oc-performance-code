@@ -57,6 +57,49 @@ _NEO4J_OCPQ: dict[str, str] = {
         MATCH (a1)-[:O2O]->(a3:Offer)<-[:E2O]-(e3:O_Created)
         RETURN a1.id, a2.id, a3.id, e2.id, e3.id
     """,
+    "Q1_EKG_single": """
+        MATCH (c:Application) <-[:E2O]- (e:A_Submitted)
+        WHERE c.ID = "Application_681547497"
+        RETURN e.timestamp, e.LoanGoal
+    """,
+    "Q1_EKG_all": """
+        MATCH (c:Application) <-[:E2O]- (e:A_Submitted)
+        RETURN e.timestamp, e.LoanGoal
+    """,
+    "Q2_EKG_single": """
+        MATCH (o:Offer) <-[:E2O]- (e1:O_Created) <-[:DF {EntityType: 'Offer'}]- (e2:O_CreateOffer)
+        WHERE o.ID = "Offer_716078829"
+        RETURN e1,e2
+    """,
+    "Q2_EKG_all": """
+        MATCH (o:Offer) <-[:E2O]- (e1:O_Created) <-[:DF {EntityType: 'Offer'}]- (e2:O_CreateOffer)
+        RETURN e1,e2
+    """,
+    "Q3_EKG_single": """
+        MATCH (e1:O_Created) -[:E2O]-> (o:Offer) <-[:E2O]- (e2:O_Cancelled)
+        WHERE o.ID = "Offer_716078829" AND e1.time <= e2.time
+        RETURN e1,e2
+
+    """,
+    "Q3_EKG_all": """
+        MATCH (e1:O_Created) -[:E2O]-> (o:Offer) <-[:E2O]- (e2:O_Cancelled)
+        WHERE e1.time <= e2.time
+        RETURN e1,e2
+    """,
+    # omitting Q4_EKG from corpus as it queries trace variants which is tested in separate query workload
+    # omitting Q5_EKG from corpus as it is identical to Q6 from OCPQ corpus
+    "Q6_EKG": """
+        MATCH (o:Offer)<-[:E2O]-(e1:O_Created) -[df:DF {EntityType: "Offer"}]-> (e2:O_Cancelled})-[:E2O]->(o)
+        MATCH (e2)-[:E2O]->(c:Case_AWO)<-[:E2O]-(e1)-[:E2O]->(o)
+        WITH c, count(o) AS ct
+        WHERE ct > 1
+        MATCH (o:Offer)<-[:E2O]-(e1:O_Created) -[df:DF {EntityType: "Offer"}]-> (e2:O_Cancelled)-[:CORR]->(o)
+        MATCH (e2)-[:E2O]->(c)<-[:E2O]-(e1)-[:E2O]->(o)
+        WITH e2,c
+        MATCH (e1:A_CreateApplication)-[:E2O]->(c)<-[:E2O]-(e2)
+        MATCH p = (e1) -[:DF* {EntityType: "Case_AWO"}]-> (e2)
+        RETURN p
+    """,
 }
 
 
