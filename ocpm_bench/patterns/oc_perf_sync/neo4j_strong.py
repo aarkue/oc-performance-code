@@ -23,6 +23,18 @@ WITH activity, (us_max - us_min) / 1000000 AS span_s
 RETURN activity, toInteger(SUM(span_s)) AS total_sync_seconds, COUNT(*) AS cnt
 """
 
+_CYPHER_WITH_DF_EDGES = """
+MATCH (e2) -[df:DF]-> (e) 
+WITH e, MIN(e2.time) AS enablingTime, MAX(e2.time) AS delayingTime
+RETURN MAX(duration.inSeconds(enablingTime,delayingTime)),labels(e)[0]
+"""
+
+_CYPHER_WITH_EVENTS_AND_DF_EDGES = """
+MATCH (e2:Event) -[df:DF]-> (e:Event) 
+WITH e, MIN(e2.time) AS enablingTime, MAX(e2.time) AS delayingTime
+RETURN MAX(duration.inSeconds(enablingTime,delayingTime)),labels(e)[0]
+"""
+
 
 def run(model, _inputs) -> list[tuple[str, int, int]]:
     rows = model.execute_cypher(_CYPHER)
