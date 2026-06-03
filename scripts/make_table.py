@@ -34,8 +34,8 @@ import math
 import statistics
 import sys
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 MODEL_FAMILIES: list[tuple[str, list[tuple[str, str]]]] = [
     ("Relational", [("sqlite_mem", "SQLite"), ("duckdb", "DuckDB")]),
@@ -48,8 +48,8 @@ MODEL_FAMILIES: list[tuple[str, list[tuple[str, str]]]] = [
 # patterns sharing a label are pooled before per-cell aggregation.
 PATTERN_FAMILIES: list[tuple[str, list[tuple[list[str], str]]]] = [
     ("P1: Control flow", [(["dfg"], "DFG"), (["variants"], "Variants")]),
-    ("P2: Queries",      [(["ocpq"], "OCPQ")]),
-    ("P3: OC-Perf",      [(["oc_perf_sync", "oc_perf_delaying"], "OC-Perf")]),
+    ("P2: Queries",      [(["ocpq"], "OCPQ"), (["ekg"], "EKG")]),
+    ("P3: OC-Perf",      [(["oc_perf_sync"], "W1"), (["oc_perf_delaying"], "W2")]),
     ("P4: BI/KPI",       [(["kpi_heatmap"], "K1"), (["kpi_conversion"], "K2")]),
 ]
 
@@ -127,30 +127,33 @@ def _aggregate(per_instance: list[float]) -> tuple[float, float | None]:
     return mean, std
 
 
-def _tint(value: float, col_min: float, col_max: float) -> int:
-    if col_min == col_max or not math.isfinite(col_min) or col_max <= 0:
-        return TINT_MAX
-    lv = math.log10(max(value, 1e-3))
-    lo = math.log10(max(col_min, 1e-3))
-    hi = math.log10(max(col_max, 1e-3))
-    if hi == lo:
-        return TINT_MAX
-    frac = (lv - lo) / (hi - lo)
-    return int(round(TINT_MAX - frac * (TINT_MAX - TINT_MIN)))
+def _tint(value: float) -> int:
+    """Shade by order-of-magnitude band (darker = faster)."""
+    if not math.isfinite(value):
+        return 0
+    if value < 10:
+        return 60
+    if value < 100:
+        return 40
+    if value < 1000:
+        return 20
+    return 5
 
 
 def _render_cell(
-    per_instance: list[float], col_min: float, col_max: float,
+    per_instance: list[float], col_best_tint: int,
     enable_color: bool, enable_bold: bool,
 ) -> str:
     if not per_instance:
         return "\\multicolumn{1}{c}{--}"
     mean, _ = _aggregate(per_instance)
     body = _fmt_num(mean)
-    if enable_bold and mean == col_min:
+    # Bold every cell in the column's fastest band (not just the single min):
+    # the heatmap bands, not exact ranks, are what we read off the table.
+    if enable_bold and _tint(mean) == col_best_tint:
         body = f"\\textbf{{{body}}}"
     if enable_color:
-        body = f"\\cellcolor{{{TINT_HUE}!{_tint(mean, col_min, col_max)}}}{body}"
+        body = f"\\cellcolor{{{TINT_HUE}!{_tint(mean)}}}{body}"
     return body
 
 
@@ -195,17 +198,17 @@ def build_table(
             out.extend(data.get(pk, {}).get(model_key, []))
         return out
 
-    col_min: dict[str, float] = {}
-    col_max: dict[str, float] = {}
+    # Fastest band reached in each column (max tint = lowest order-of-magnitude);
+    # every cell in that band is bolded.
+    col_best_tint: dict[str, int] = {}
     for pat_keys, label in pat_cols:
-        means: list[float] = []
+        tints: list[int] = []
         for _, models in MODEL_FAMILIES:
             for model_key, _ in models:
                 per_inst = aggregated(model_key, pat_keys)
                 if per_inst:
-                    means.append(statistics.fmean(per_inst))
-        col_min[label] = min(means) if means else float("nan")
-        col_max[label] = max(means) if means else float("nan")
+                    tints.append(_tint(statistics.fmean(per_inst)))
+        col_best_tint[label] = max(tints) if tints else 0
 
     caption_parts: list[str] = []
     if draft_note:
@@ -214,10 +217,13 @@ def build_table(
         )
     caption_parts.append(
         r"Mean wall-clock time (ms) on BPIC17 per model and access pattern. "
-        r"Warm runs only; cold excluded. Per-column fastest is bold; cell "
-        r"shade proportional to log-speedup over column slowest "
-        r"(darker = faster within column). See "
-        r"\autoref{tab:typing-results} for weak/strong typing."
+        r"Warm runs only, cold excluded. Cells in each column's fastest band "
+        r"are in bold. Cells are "
+        r"shaded by order-of-magnitude band, darker = faster: under 10\,ms, "
+        r"under 100\,ms, under 1\,s, and at or above 1\,s. \texttt{SQLite} and "
+        r"\texttt{DuckDB} use the weak schema, \texttt{Kuzu} the strong schema. "
+        r"\autoref{tab:typing-results} reports per-engine weak/strong speedups. "
+        r"The 10 warm runs per cell vary by about 5\% (median across cells)."
     )
 
     lines = [
@@ -248,7 +254,7 @@ def build_table(
             for pat_keys, label in pat_cols:
                 per_inst = aggregated(model_key, pat_keys)
                 row_cells.append(_render_cell(
-                    per_inst, col_min[label], col_max[label],
+                    per_inst, col_best_tint[label],
                     enable_color=enable_color, enable_bold=enable_bold,
                 ))
             lines.append(" & ".join(row_cells) + r" \\")
@@ -267,7 +273,7 @@ def _speedup_tint(speedup: float) -> tuple[str, int]:
     if not math.isfinite(speedup) or speedup <= 0:
         return TINT_HUE, 0
     delta = abs(math.log10(speedup))
-    intensity = int(round(min(delta * 60, TINT_MAX)))
+    intensity = round(min(delta * 60, TINT_MAX))
     intensity = max(intensity, 0)
     hue = TINT_HUE if speedup >= 1.0 else "red"
     return hue, intensity
@@ -288,10 +294,10 @@ def build_typing_table(
         )
     caption_parts.append(
         r"Speedup of strong over weak typing on BPIC17 "
-        r"($\text{weak ms}/\text{strong ms}$): $>1.0$ favours strong (teal), "
-        r"$<1.0$ favours weak (red); bold marks effects $\geq$20\%. "
-        r"Per-corpus speedup is the geometric mean over its constituent "
-        r"patterns. \autoref{tab:main-results} reports the weak variant for "
+        r"($\text{weak ms}/\text{strong ms}$): $>1.0$ favours strong (teal) "
+        r"and $<1.0$ favours weak (red). Bold marks effects $\geq$20\%. "
+        r"Per-corpus speedup is the geometric mean over its patterns. "
+        r"\autoref{tab:main-results} reports the weak variant for "
         r"SQLite and DuckDB and the strong variant for Kuzu."
     )
     lines.append(r"\caption{" + "".join(caption_parts) + r"}\label{tab:typing-results}")

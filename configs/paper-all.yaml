@@ -90,3 +90,15 @@ cells:
   - { model: pandas,                  pattern: kpi_conversion,   dataset: bpic17 }
   - { model: sqlite_mem,              pattern: kpi_conversion,   dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: kpi_conversion,   dataset: bpic17 }
+
+  # EKG (P2 graph-query corpus, Q1-Q3).
+  - { model: linked_ocel,             pattern: ekg,      dataset: bpic17 }
+  - { model: duckdb,                  pattern: ekg,      dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: ekg,      dataset: bpic17 }
+  - { model: kuzu,                    pattern: ekg,      dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: ekg,      dataset: bpic17 }
+  - { model: neo4j_strong,            pattern: ekg,      dataset: bpic17 }
+  - { model: polars,                  pattern: ekg,      dataset: bpic17 }
+  - { model: pandas,                  pattern: ekg,      dataset: bpic17 }
+  - { model: sqlite_mem,              pattern: ekg,      dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels,  pattern: ekg,      dataset: bpic17 }

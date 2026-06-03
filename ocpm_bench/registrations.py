@@ -28,6 +28,15 @@ import ocpm_bench.patterns.dfg.polars
 # Pattern: dfg_prim
 import ocpm_bench.patterns.dfg_prim
 
+# Pattern: ekg
+import ocpm_bench.patterns.ekg
+import ocpm_bench.patterns.ekg._sql
+import ocpm_bench.patterns.ekg.kuzu
+import ocpm_bench.patterns.ekg.linked_ocel
+import ocpm_bench.patterns.ekg.neo4j_strong
+import ocpm_bench.patterns.ekg.pandas
+import ocpm_bench.patterns.ekg.polars
+
 # Pattern: kpi_conversion (P4 / K2)
 import ocpm_bench.patterns.kpi_conversion
 import ocpm_bench.patterns.kpi_conversion._sql

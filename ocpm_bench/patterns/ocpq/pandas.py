@@ -158,9 +158,12 @@ def _q6(model: PandasModel) -> list[tuple]:
 def _q7(model: PandasModel) -> list[tuple]:
     rel = model.relations
     o2o = model.frames["o2o"]
+    apps = model.objects.loc[
+        model.objects["ocel:type"] == "Application", ["ocel:oid"]
+    ].rename(columns={"ocel:oid": "app_id"})
     links = o2o[["ocel:oid", "ocel:oid_2"]].rename(
         columns={"ocel:oid": "app_id", "ocel:oid_2": "offer_id"}
-    )
+    ).merge(apps, on="app_id")
     offer_created = rel.loc[
         (rel["ocel:type"] == "Offer") & (rel["ocel:activity"] == "O_Created"),
         ["ocel:oid", "ocel:eid"],

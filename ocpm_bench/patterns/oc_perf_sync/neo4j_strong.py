@@ -1,7 +1,8 @@
-"""W1 via Neo4j (strong): mirror of Kuzu strong query.
+"""W1 via Neo4j (strong): per-event sync time over materialized DF edges.
 
-Subtract at microsecond resolution then floor; ``epochSeconds`` first
-truncates sub-second fractions and drifts per-event spans.
+Span = ``MAX(pred.time) - MIN(pred.time)`` over an event's incoming ``:DF`` edges,
+floored to whole seconds, summed per activity. Computed in integer microseconds
+to match the ``linked_ocel`` oracle's floor.
 """
 
 from __future__ import annotations
@@ -11,28 +12,12 @@ import sys
 from ocpm_bench.harness import registry
 
 _CYPHER = """
-MATCH (o)<-[:E2O]-(e)
-WITH o, e ORDER BY e.time, e.id
-WITH o, COLLECT({eid: e.id,
-                 us: e.time.epochSeconds * 1000000 + e.time.nanosecond / 1000,
-                 type: labels(e)[0]}) AS evs
-UNWIND range(1, size(evs) - 1) AS i
-WITH evs[i].eid AS eid, evs[i].type AS activity, evs[i - 1].us AS pred_us
-WITH eid, activity, MIN(pred_us) AS us_min, MAX(pred_us) AS us_max
+MATCH (e2)-[:DF]->(e)
+WITH e, labels(e)[0] AS activity,
+     MIN(e2.time.epochSeconds * 1000000 + e2.time.nanosecond / 1000) AS us_min,
+     MAX(e2.time.epochSeconds * 1000000 + e2.time.nanosecond / 1000) AS us_max
 WITH activity, (us_max - us_min) / 1000000 AS span_s
 RETURN activity, toInteger(SUM(span_s)) AS total_sync_seconds, COUNT(*) AS cnt
-"""
-
-_CYPHER_WITH_DF_EDGES = """
-MATCH (e2) -[df:DF]-> (e) 
-WITH e, MIN(e2.time) AS enablingTime, MAX(e2.time) AS delayingTime
-RETURN MAX(duration.inSeconds(enablingTime,delayingTime)),labels(e)[0]
-"""
-
-_CYPHER_WITH_EVENTS_AND_DF_EDGES = """
-MATCH (e2:Event) -[df:DF]-> (e:Event) 
-WITH e, MIN(e2.time) AS enablingTime, MAX(e2.time) AS delayingTime
-RETURN MAX(duration.inSeconds(enablingTime,delayingTime)),labels(e)[0]
 """
 
 

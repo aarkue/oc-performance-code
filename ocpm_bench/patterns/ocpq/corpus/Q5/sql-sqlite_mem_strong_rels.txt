@@ -1,0 +1,26 @@
+WITH CreatedOffers AS (
+    SELECT
+        O2O.ocel_source_id,
+        E2O3.ocel_object_id AS caseR,
+        E2O2.ocel_event_id
+    FROM
+        object_object_Application__Offer AS O2O
+        INNER JOIN event_object_O_Created__Offer AS E2O2
+            ON E2O2.ocel_object_id = O2O.ocel_target_id
+        INNER JOIN event_object_O_Created__Case_R AS E2O3
+            ON E2O3.ocel_event_id = E2O2.ocel_event_id
+)
+SELECT DISTINCT
+    A1.ocel_id,
+    E2O2.ocel_object_id AS a2_id,
+    E2O.ocel_event_id AS e1_id,
+    MIN(CO.caseR = E2O2.ocel_object_id) AS satisfied
+FROM
+    object_Application AS A1
+    INNER JOIN event_object_A_Accepted__Application AS E2O
+        ON E2O.ocel_object_id = A1.ocel_id
+    INNER JOIN event_object_A_Accepted__Case_R AS E2O2
+        ON E2O2.ocel_event_id = E2O.ocel_event_id
+    INNER JOIN CreatedOffers AS CO
+        ON CO.ocel_source_id = A1.ocel_id
+GROUP BY A1.ocel_id, E2O2.ocel_object_id, E2O.ocel_event_id

@@ -39,24 +39,23 @@ def _q_delete_nodes() -> str:
     return "MATCH (n) CALL (n) { DELETE n } IN TRANSACTIONS OF 1000 ROWS;"
 
 def _q_materialize_df_relations(object_type: str) -> str:
-    if object_type == "Case_R":
-        _row_num = 10
-    else:
-        _row_num = 1000
+    # `object_type` is the cleaned node label. Case_R objects span ~8k events
+    # each, so use a smaller transaction batch to bound peak memory.
+    _row_num = 10 if object_type == "Case_R" else 1000
 
     return f"""
-        MATCH ( n : `{object_type}` )"
+        MATCH (n:`{object_type}`)
 
         CALL (n) {{
             MATCH ( n ) <-[:E2O]- ( e )
        
-            WITH n , e as nodes ORDER BY e.time,elementId(e) ASC
-            WITH n , collect ( nodes ) as nodeList
+            WITH n , e ORDER BY e.time, e.id ASC
+            WITH n , collect(e) as nodeList
             UNWIND range(0,size(nodeList)-2) AS i
             WITH n , nodeList[i] as first, nodeList[i+1] as second
 
-            MERGE ( first ) -[df:DF {{ id:n.id, EntityType: '`{object_type}`' }}]->( second )
-        }} IN TRANSACTIONS OF `{_row_num}` ROWS;
+            MERGE ( first ) -[df:DF {{ id:n.id, EntityType: '{object_type}' }}]->( second )
+        }} IN TRANSACTIONS OF {_row_num} ROWS;
     """
 
 
@@ -163,10 +162,12 @@ class Neo4jModelStrong:
             export=lambda out: _run_kuzu_csv_export(kuzu_path, out),
         )
 
+        # Populate type info before loading: _wipe_and_load's DF materialization
+        # iterates self._ob_types, so the object types must be known first.
+        self._name_map, self._ev_types, self._ob_types = _build_name_info(str(src))
+
         if self._needs_load():
             self._wipe_and_load(csv_dir)
-
-        self._name_map, self._ev_types, self._ob_types = _build_name_info(str(src))
 
     def _needs_load(self) -> bool:
         try:
@@ -175,7 +176,17 @@ class Neo4jModelStrong:
             )
         except Exception:
             return True
-        return not rows or rows[0][0] == 0
+        if not rows or rows[0][0] == 0:
+            return True
+        # DF edges are materialized at load; a DB loaded before they existed
+        # (or with the earlier broken materialization) must be rebuilt.
+        try:
+            df_rows = self.execute_cypher(
+                "MATCH ()-[r:DF]->() RETURN count(r) AS n"
+            )
+        except Exception:
+            return True
+        return not df_rows or df_rows[0][0] == 0
 
     def teardown(self) -> None:
         if self._driver is not None:
@@ -284,9 +295,12 @@ class Neo4jModelStrong:
                         )
                     )
 
-            # materiali DF relations
+            # Materialize DF edges per object type. Pass the cleaned label so
+            # the MATCH binds the same node labels the CSV loader created.
             for o_type in self._ob_types:
-                self._run_write(_q_materialize_df_relations(o_type))
+                self._run_write(
+                    _q_materialize_df_relations(clean_type_name(o_type))
+                )
 
         finally:
             for p in loaded:

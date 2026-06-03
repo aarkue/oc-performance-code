@@ -1,4 +1,4 @@
-"""DFG via Neo4j (strongly-typed schema)."""
+"""DFG via Neo4j (strong): group-count over the materialized per-type ``:DF`` edges."""
 
 from __future__ import annotations
 
@@ -9,12 +9,8 @@ from ocpm_bench.models.primitives import clean_type_name
 from ocpm_bench.patterns.base import PerTypeInputs
 
 _DFG_CYPHER = """
-MATCH (o:`{object_type}`)<-[:E2O]-(e)
-WITH o, labels(e)[0] AS activity, e.time AS t, e.id AS eid
-ORDER BY t, eid
-WITH o, COLLECT(activity) AS trace
-UNWIND range(0, size(trace) - 2) AS i
-RETURN trace[i] AS src, trace[i+1] AS tgt, COUNT(*) AS cnt
+MATCH (a)-[df:DF {{EntityType: '{object_type}'}}]->(b)
+RETURN labels(a)[0] AS src, labels(b)[0] AS tgt, COUNT(*) AS cnt
 """
 
 

@@ -1,16 +1,13 @@
 """P3 / W1: per-event synchronization time, aggregated per activity.
 
-For each event ``e``, gather the set of distinct predecessor events that share
-at least one object with ``e`` via E2O and have a strictly earlier timestamp.
-If that set is non-empty, the per-event synchronization time is the span
-between the earliest and latest predecessor timestamps (floored to whole
-seconds). Events without predecessors are skipped.
+For each event ``e`` and each related object, take ``e``'s immediate
+directly-follows predecessor on that object. The per-event sync time is the span
+between the earliest and latest of those predecessor timestamps, floored to whole
+seconds. Events without predecessors are skipped.
 
-Output is the unordered set of ``(activity, total_sync_seconds, count)``
-triples, one row per activity that has at least one event with predecessors.
-The mean per activity is ``total_sync_seconds / count``; we keep the
-numerator and denominator separate so cross-engine equality is integer-only
-and not subject to float-precision drift.
+Output is the set of ``(activity, total_sync_seconds, count)`` triples. The mean
+per activity is ``total_sync_seconds / count``, kept as separate numerator and
+denominator so cross-engine equality stays integer-only.
 """
 
 from __future__ import annotations

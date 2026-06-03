@@ -12,39 +12,27 @@ from collections import Counter
 
 from ocpm_bench.harness import registry
 
+# df.id = object ocel_id, df.EntityType = object type. Python picks the latest
+# predecessor per event (tie-break: object ocel_id ascending).
 _STRONG_CYPHER = """
-MATCH (o)<-[:E2O]-(e)
-WHERE LABEL(o) IN $object_labels AND LABEL(e) IN $event_labels
-WITH o, e ORDER BY e.time, e.id
-LIMIT 9223372036854775807
-WITH o,
-     COLLECT(e.id) AS eids,
-     COLLECT(e.time) AS times,
-     COLLECT(LABEL(e)) AS types
-UNWIND range(2, size(eids)) AS i
-RETURN eids[i] AS eid,
-       (to_epoch_ms(times[i - 1]) / 1000) * 1000000
-         + (date_part('microsecond', times[i - 1]) % 1000000) AS pred_us,
-       types[i - 1] AS pred_activity,
-       o.id AS o_id,
-       LABEL(o) AS o_type
+MATCH (e2)-[df:DF]->(e)
+RETURN e.id AS eid,
+       (to_epoch_ms(e2.time) / 1000) * 1000000
+         + (date_part('microsecond', e2.time) % 1000000) AS pred_us,
+       LABEL(e2) AS pred_activity,
+       df.id AS o_id,
+       df.EntityType AS o_type
 """
 
+# Weak: same, activity from the node `type` column.
 _WEAK_CYPHER = """
-MATCH (o:Object)<-[:E2O]-(e:Event)
-WITH o, e ORDER BY e.time, e.id
-LIMIT 9223372036854775807
-WITH o,
-     COLLECT(e.id) AS eids,
-     COLLECT(e.time) AS times,
-     COLLECT(e.type) AS types
-UNWIND range(2, size(eids)) AS i
-RETURN eids[i] AS eid,
-       (to_epoch_ms(times[i - 1]) / 1000) * 1000000
-         + (date_part('microsecond', times[i - 1]) % 1000000) AS pred_us,
-       types[i - 1] AS pred_activity,
-       o.id AS o_id,
-       o.type AS o_type
+MATCH (e2:Event)-[df:DF]->(e:Event)
+RETURN e.id AS eid,
+       (to_epoch_ms(e2.time) / 1000) * 1000000
+         + (date_part('microsecond', e2.time) % 1000000) AS pred_us,
+       e2.type AS pred_activity,
+       df.id AS o_id,
+       df.EntityType AS o_type
 """
 
 
@@ -52,13 +40,7 @@ def run(model, _inputs) -> list[tuple[str, str, int]]:
     if model.name == "kuzu_weak":
         rows = model.execute_cypher(_WEAK_CYPHER)
     else:
-        rows = model.execute_cypher(
-            _STRONG_CYPHER,
-            {
-                "object_labels": model._object_labels,
-                "event_labels": model._event_labels,
-            },
-        )
+        rows = model.execute_cypher(_STRONG_CYPHER)
     # Per-event argmax: maximise pred_us; tie-break on o_id ascending.
     best: dict[str, tuple[int, str, str, str]] = {}
     for eid, pred_us, pred_activity, o_id, o_type in rows:

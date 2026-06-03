@@ -1,0 +1,22 @@
+# Small EKG correctness check: linked_ocel oracle vs each engine, Q1-Q3.
+# Each `ekg` cell runs all of EKG Q1, Q2, Q3 and is cross-checked against the
+# linked_ocel oracle. In-process engines only by default; uncomment the typing
+# variants and neo4j_strong (needs OCPM_NEO4J_* env + a running Neo4j) as needed.
+
+repetitions: 1
+matrix_passes: 1
+randomize_cell_order: false
+results_path: results/ekg-small.jsonl
+cell_timeout_seconds: 1800
+allow_incorrect: true
+
+cells:
+  - { model: linked_ocel, pattern: ekg, dataset: bpic17 }
+  # - { model: sqlite_mem,  pattern: ekg, dataset: bpic17 }
+  - { model: duckdb,      pattern: ekg, dataset: bpic17 }
+  - { model: kuzu,        pattern: ekg, dataset: bpic17 }
+  - { model: polars,      pattern: ekg, dataset: bpic17 }
+  - { model: pandas,      pattern: ekg, dataset: bpic17 }
+  # - { model: duckdb_strong_rels,     pattern: ekg, dataset: bpic17 }
+  # - { model: sqlite_mem_strong_rels, pattern: ekg, dataset: bpic17 }
+  # - { model: neo4j_strong,           pattern: ekg, dataset: bpic17 }

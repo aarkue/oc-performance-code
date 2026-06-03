@@ -8,9 +8,11 @@ to `_`); pattern impls map back via `model.original_name`.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 import kuzu
+import polars as pl
 import r4pm
 
 from ocpm_bench.datasets.base import Dataset
@@ -79,6 +81,61 @@ def _cleaned_labels(types: list[str]) -> list[str]:
     return [clean_type_name(t) for t in types]
 
 
+def _kuzu_has_df(conn: kuzu.Connection) -> bool:
+    names = {
+        row[0]
+        for row in conn.execute("CALL show_tables() RETURN name").get_as_pl().iter_rows()
+    }
+    return "DF" in names
+
+
+def materialize_df_kuzu(conn: kuzu.Connection) -> None:
+    """Materialize per-object directly-follows edges on the strong Kuzu DB.
+
+    One ``:DF`` edge per consecutive event pair on an object, props ``id`` (object
+    ocel_id) and ``EntityType`` (object type). Kuzu cannot ``CREATE`` rels from
+    list elements, so pairs are computed in Python and bulk-``COPY``ed per
+    (from-activity, to-activity) table pair. Untimed, persisted in the cached DB.
+    """
+    if _kuzu_has_df(conn):
+        return
+    rows = conn.execute(
+        "MATCH (e)-[:E2O]->(o) "
+        "RETURN o.id AS oid, LABEL(o) AS otype, e.id AS eid, "
+        "LABEL(e) AS act, e.time AS t"
+    ).get_as_pl()
+    if rows.height == 0:
+        return
+    edges = (
+        rows.sort(["oid", "t", "eid"])
+        .with_columns(
+            to_eid=pl.col("eid").shift(-1).over("oid"),
+            to_act=pl.col("act").shift(-1).over("oid"),
+        )
+        .filter(pl.col("to_eid").is_not_null())
+        .select([
+            pl.col("act").alias("from_act"),
+            pl.col("to_act"),
+            pl.col("eid").alias("from"),
+            pl.col("to_eid").alias("to"),
+            pl.col("oid").alias("id"),
+            pl.col("otype").alias("EntityType"),
+        ])
+    )
+    pair_keys = [tuple(r) for r in edges.select(["from_act", "to_act"]).unique().iter_rows()]
+    rel_pairs = ", ".join(f"FROM `{a}` TO `{b}`" for a, b in pair_keys)
+    conn.execute(f"CREATE REL TABLE DF({rel_pairs}, id STRING, EntityType STRING)")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        for key, grp in edges.group_by(["from_act", "to_act"]):
+            a, b = key
+            csv_path = tmp_dir / f"df_{a}__{b}.csv"
+            grp.select(["from", "to", "id", "EntityType"]).write_csv(csv_path)
+            conn.execute(
+                f'COPY DF FROM "{csv_path}" (FROM="{a}", TO="{b}", HEADER=true)'
+            )
+
+
 class KuzuModel:
     name = "kuzu"
 
@@ -109,6 +166,7 @@ class KuzuModel:
         self._name_map, self._ev_types, self._ob_types = _build_name_info(str(src))
         self._event_labels = _cleaned_labels(self._ev_types)
         self._object_labels = _cleaned_labels(self._ob_types)
+        materialize_df_kuzu(self._conn)
 
     def teardown(self) -> None:
         if self._conn is not None:

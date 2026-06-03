@@ -1,0 +1,25 @@
+WITH event_times AS ({union_cte}),
+offer_e2o AS (
+    SELECT ocel_event_id, ocel_object_id FROM event_object_O_Accepted__Offer
+    UNION ALL SELECT ocel_event_id, ocel_object_id FROM event_object_O_Cancelled__Offer
+    UNION ALL SELECT ocel_event_id, ocel_object_id FROM event_object_O_CreateOffer__Offer
+    UNION ALL SELECT ocel_event_id, ocel_object_id FROM event_object_O_Created__Offer
+    UNION ALL SELECT ocel_event_id, ocel_object_id FROM event_object_O_Refused__Offer
+    UNION ALL SELECT ocel_event_id, ocel_object_id FROM event_object_O_Returned__Offer
+    UNION ALL SELECT ocel_event_id, ocel_object_id FROM event_object_O_Sent_mailandonline___Offer
+    UNION ALL SELECT ocel_event_id, ocel_object_id FROM event_object_O_Sent_onlineonly___Offer
+),
+offer_events AS (
+    SELECT eo.ocel_object_id AS offer_id, eo.ocel_event_id AS eid, et.ocel_time AS t
+    FROM offer_e2o AS eo
+        JOIN event_times AS et ON et.ocel_id = eo.ocel_event_id
+),
+with_pred AS (
+    SELECT offer_id, eid,
+        LAG(eid) OVER (PARTITION BY offer_id ORDER BY t, eid) AS predecessor_id
+    FROM offer_events
+)
+SELECT wp.offer_id, wp.eid AS o_created_id, wp.predecessor_id
+FROM with_pred AS wp
+    JOIN event_object_O_Created__Offer AS oc ON oc.ocel_event_id = wp.eid
+WHERE wp.predecessor_id IS NOT NULL

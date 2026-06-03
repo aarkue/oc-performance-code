@@ -1,0 +1,21 @@
+WITH event_times AS ({union_cte}),
+offer_events AS (
+    SELECT
+        eo.ocel_object_id AS offer_id,
+        eo.ocel_event_id AS eid,
+        e.ocel_type AS act,
+        et.ocel_time AS t
+    FROM event_object AS eo
+    JOIN object_Offer AS o ON o.ocel_id = eo.ocel_object_id
+    JOIN event AS e ON e.ocel_id = eo.ocel_event_id
+    JOIN event_times AS et ON et.ocel_id = eo.ocel_event_id
+),
+with_pred AS (
+    SELECT
+        offer_id, eid, act,
+        LAG(eid) OVER (PARTITION BY offer_id ORDER BY t, eid) AS predecessor_id
+    FROM offer_events
+)
+SELECT offer_id, eid AS o_created_id, predecessor_id
+FROM with_pred
+WHERE act = 'O_Created' AND predecessor_id IS NOT NULL

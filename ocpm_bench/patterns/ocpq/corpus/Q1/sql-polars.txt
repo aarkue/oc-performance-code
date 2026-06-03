@@ -1,9 +1,0 @@
-SELECT
-    A1.ocel_id,
-    (COUNT(E1.ocel_id) <> 1) AS satisfied
-FROM
-    object_Application AS A1
-    LEFT JOIN event_object AS E2O ON E2O.ocel_object_id = A1.ocel_id
-    LEFT JOIN event_A_Submitted AS E1 ON E2O.ocel_event_id = E1.ocel_id
-GROUP BY
-    A1.ocel_id

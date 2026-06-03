@@ -20,12 +20,13 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Layer 1: dependency install (cacheable; only re-runs when pyproject/uv.lock change).
-# r4pm prerelease pin bundles OCPQ support; edit the version here to swap builds.
+# r4pm 0.5.5a4 is the published prerelease (OCPQ microsecond fix); installed from
+# the index so the image matches the native dev env.
 COPY pyproject.toml uv.lock ./
 COPY ocpm_bench ./ocpm_bench
 RUN uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.14 \
  && uv pip install -e ".[dev]" \
- && uv pip install --prerelease=allow "r4pm[polars]==0.5.5a3"
+ && uv pip install --prerelease=allow "r4pm[polars]==0.5.5a4"
 
 # Layer 2: project assets (changes more often, kept separate from heavy install layer).
 COPY configs ./configs

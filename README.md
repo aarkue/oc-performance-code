@@ -5,7 +5,7 @@ Benchmark harness for object-centric process data models.
 The benchmark currently covers these access patterns:
 
 - P1 control flow: directly-follows graphs (`dfg`), trace variants (`variants`)
-- P2 queries: OCPQ Q1 to Q7 (`ocpq`)
+- P2 queries: OCPQ Q1 to Q7 (`ocpq`), EKG corpus Q1 to Q3 (`ekg`)
 - P3 OC-Perf: per-event synchronization time (`oc_perf_sync`), latest-predecessor counts (`oc_perf_delaying`)
 - P4 BI/KPI: activity x object-type heatmap (`kpi_heatmap`), conversion rate (`kpi_conversion`)
 
@@ -38,7 +38,7 @@ uv venv .venv --python 3.14
 uv pip install -e ".[dev]"
 # r4pm requires a custom build with OCPQ support; the normal PyPI release does not include it.
 # Install the prerelease (with the polars extra) from https://github.com/aarkue/r4pm/releases or use:
-# uv pip install "r4pm[polars]==0.5.5a2"
+# uv pip install "r4pm[polars]==0.5.5a4"
 # or uv pip install "<path-to-r4pm-wheel>[polars]" if you downloaded a wheel (e.g., from GitHub)
 ```
 
@@ -52,7 +52,7 @@ python -m venv .venv
 #   Windows cmd.exe:    .venv\Scripts\activate.bat
 pip install -e ".[dev]"
 # Same r4pm caveat as above, e.g.:
-# pip install "r4pm[polars]==0.5.5a2"
+# pip install "r4pm[polars]==0.5.5a4"
 # or pip install "<path-to-r4pm-wheel>[polars]"
 ```
 

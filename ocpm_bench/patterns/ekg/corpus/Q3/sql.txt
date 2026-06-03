@@ -1,0 +1,12 @@
+SELECT DISTINCT
+    A1.ocel_id AS offer_id,
+    E1.ocel_id AS o_created_id,
+    E2.ocel_id AS o_cancelled_id
+FROM
+    object_Offer AS A1
+    JOIN event_object AS EO1 ON EO1.ocel_object_id = A1.ocel_id
+    JOIN event_O_Created AS E1 ON E1.ocel_id = EO1.ocel_event_id
+    JOIN event_object AS EO2 ON EO2.ocel_object_id = A1.ocel_id
+    JOIN event_O_Cancelled AS E2 ON E2.ocel_id = EO2.ocel_event_id
+WHERE
+    E1.ocel_time <= E2.ocel_time

@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import sys
 
-# `evaluate_ocpq` is attached to the r4pm pymodule via `m.add_function(...)`,
-# so it is not in the `r4pm.bindings.*` stubs.
+# `evaluate_ocpq` is attached to the r4pm module, not the bindings submodule
 from r4pm import r4pm as _native  # type: ignore[attr-defined]
 
 from ocpm_bench.harness import registry

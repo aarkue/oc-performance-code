@@ -1,0 +1,9 @@
+SELECT
+    E1.ocel_id,
+    (
+        SELECT COUNT(*)
+        FROM event_object_O_Returned__Offer AS E2O
+        WHERE E2O.ocel_event_id = E1.ocel_id
+    ) = 1 AS satisfied
+FROM event_O_Returned AS E1
+GROUP BY E1.ocel_id

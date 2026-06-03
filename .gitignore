@@ -24,7 +24,11 @@ results/*.jsonl
 results/*.jsonl-old
 results/*.png
 results/*.pdf
+results/*.log
 results/oracles/
+
+# Local r4pm prerelease wheels (installed from the index in containers)
+wheels/
 
 # Generated tiny example OCEL (rebuilt by tests/example/build_example.py)
 tests/example/tiny.json

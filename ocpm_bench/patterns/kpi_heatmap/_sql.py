@@ -14,11 +14,19 @@ JOIN object o ON o.ocel_id = eo.ocel_object_id
 GROUP BY e.ocel_type, o.ocel_type
 """
 
+# Strong-rels: types come from the view's constant columns, no event/object join.
+_K1_SQL_STRONG_RELS = """
+SELECT ocel_event_type AS activity, ocel_object_type AS object_type, COUNT(*) AS n
+FROM event_object
+GROUP BY ocel_event_type, ocel_object_type
+"""
+
 
 def run(model, _inputs) -> list[tuple[str, str, int]]:
+    sql = _K1_SQL_STRONG_RELS if model.name.endswith("strong_rels") else _K1_SQL
     return [
         (str(a), str(t), int(n))
-        for a, t, n in model.execute_sql(_K1_SQL)
+        for a, t, n in model.execute_sql(sql)
     ]
 
 

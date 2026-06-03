@@ -1,15 +1,11 @@
-"""P3 / W2: counts of (predecessor activity, correlating object type) pairs
-that appear as the latest predecessor of an event.
+"""P3 / W2: per event, the latest directly-preceding event's (activity, object
+type), counted. A custom bottleneck-frequency measure, not an OPerA metric.
 
-For each event ``e``, enumerate all df-edges ``(p, o)`` where ``o`` is an
-object related to both ``p`` and ``e`` via E2O and ``p.time < e.time``.
-Pick the df-edge with the latest ``p.time``; break ties on ``o.ocel_id``
-ascending (handles the case where multiple objects of ``e`` share the
-same predecessor event). Emit one ``(p.activity, o.type)`` tuple per
-event, then count occurrences.
-
-Output is the unordered set of ``(predecessor_activity, object_type, count)``
-triples. Events without predecessors are skipped.
+For each event, over its df-edges ``(p, o)`` with ``p.time < e.time``, pick the
+one with the latest ``p.time``, tie-broken on ``o.ocel_id`` ascending, and emit
+``(p.activity, o.type)``. Output is the set of
+``(predecessor_activity, object_type, count)`` triples. Events without
+predecessors are skipped.
 """
 
 from __future__ import annotations

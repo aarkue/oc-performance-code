@@ -1,0 +1,8 @@
+SELECT DISTINCT
+    E2O.ocel_object_id AS application_id,
+    E1.ocel_id AS event_id,
+    E1.LoanGoal AS loan_goal,
+    E1.ocel_time AS submission
+FROM event_A_Submitted AS E1
+    JOIN event_object_A_Submitted__Application AS E2O
+        ON E2O.ocel_event_id = E1.ocel_id

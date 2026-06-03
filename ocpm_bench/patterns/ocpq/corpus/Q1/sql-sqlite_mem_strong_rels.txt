@@ -1,0 +1,10 @@
+SELECT * FROM (
+    SELECT DISTINCT
+        A1.ocel_id,
+        COUNT(E2O.ocel_event_id) <> 1
+    FROM
+        object_Application AS A1
+        LEFT JOIN event_object_A_Submitted__Application AS E2O
+            ON E2O.ocel_object_id = A1.ocel_id
+    GROUP BY A1.ocel_id
+)

@@ -17,7 +17,7 @@ from ocpm_bench.datasets.base import Dataset
 from ocpm_bench.harness import cache as _cache
 from ocpm_bench.harness import registry
 from ocpm_bench.models._versions import package_version, python_version
-from ocpm_bench.models.kuzu import execute_cypher, path_size
+from ocpm_bench.models.kuzu import _kuzu_has_df, execute_cypher, path_size
 from ocpm_bench.models.polars import cached_polars_frames
 
 
@@ -25,16 +25,30 @@ def _build_weak_kuzu(out_path: Path, frames: dict[str, pl.DataFrame]) -> None:
     """Materialize a weak-typed Kuzu DB at `out_path` from OCEL polars frames.
 
     Schema:
-        Event(id PK, type, time)
+        Event(id PK, type, time, <event attrs...>)
         Object(id PK, type)
         E2O(FROM Event, TO Object, qualifier)
         O2O(FROM Object, TO Object, qualifier)
+
+    Every non-``ocel:`` column of the events frame becomes a STRING property on
+    the single ``Event`` table (the union of all event types' attributes, null
+    where an attribute does not apply). This keeps node typing weak while still
+    carrying event attributes (e.g. ``LoanGoal``) so the EKG corpus is runnable.
     """
+    # Union of attribute columns across all event types. The three `ocel:`
+    # columns become the structural id/type/time below; everything else is an
+    # event attribute carried verbatim (cast to STRING; only id/type/time are
+    # ever read with their native type).
+    _CORE = {"ocel:eid", "ocel:activity", "ocel:timestamp"}
+    attr_cols = [c for c in frames["events"].columns if c not in _CORE]
+
     db = kuzu.Database(str(out_path))
     conn = kuzu.Connection(db)
     try:
+        attr_ddl = "".join(f", `{c}` STRING" for c in attr_cols)
         conn.execute(
-            "CREATE NODE TABLE Event(id STRING, type STRING, time TIMESTAMP, PRIMARY KEY(id))"
+            f"CREATE NODE TABLE Event(id STRING, type STRING, time TIMESTAMP"
+            f"{attr_ddl}, PRIMARY KEY(id))"
         )
         conn.execute(
             "CREATE NODE TABLE Object(id STRING, type STRING, PRIMARY KEY(id))"
@@ -52,6 +66,7 @@ def _build_weak_kuzu(out_path: Path, frames: dict[str, pl.DataFrame]) -> None:
               .cast(pl.Datetime("us"))
               .dt.strftime("%Y-%m-%dT%H:%M:%S.%6f")
               .alias("time"),
+            *[pl.col(c).cast(pl.Utf8).alias(c) for c in attr_cols],
         ])
         objects = frames["objects"].select([
             pl.col("ocel:oid").alias("id"),
@@ -93,6 +108,42 @@ def _build_weak_kuzu(out_path: Path, frames: dict[str, pl.DataFrame]) -> None:
         db.close()
 
 
+def _materialize_df_weak(conn: kuzu.Connection) -> None:
+    """Materialize per-object directly-follows edges on the weak Kuzu DB.
+
+    One ``Event``-``Event`` ``:DF`` edge per consecutive event pair on an object,
+    matching the strong model's ``:DF`` so the weak-vs-strong comparison isolates
+    node typing. Props: object id (``id``) and object type (``EntityType``). A
+    one-time, untimed model-build step, persisted in the cached DB.
+    """
+    if _kuzu_has_df(conn):
+        return
+    rows = conn.execute(
+        "MATCH (e:Event)-[:E2O]->(o:Object) "
+        "RETURN o.id AS oid, o.type AS otype, e.id AS eid, e.time AS t"
+    ).get_as_pl()
+    if rows.height == 0:
+        return
+    edges = (
+        rows.sort(["oid", "t", "eid"])
+        .with_columns(to_eid=pl.col("eid").shift(-1).over("oid"))
+        .filter(pl.col("to_eid").is_not_null())
+        .select([
+            pl.col("eid").alias("from"),
+            pl.col("to_eid").alias("to"),
+            pl.col("oid").alias("id"),
+            pl.col("otype").alias("EntityType"),
+        ])
+    )
+    conn.execute(
+        "CREATE REL TABLE DF(FROM Event TO Event, id STRING, EntityType STRING)"
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        csv = Path(tmp) / "df_weak.csv"
+        edges.write_csv(csv)
+        conn.execute(f'COPY DF FROM "{csv}" (HEADER=true)')
+
+
 class KuzuWeakModel:
     name = "kuzu_weak"
 
@@ -114,6 +165,7 @@ class KuzuWeakModel:
         )
         self._db = kuzu.Database(str(self._path))
         self._conn = kuzu.Connection(self._db)
+        _materialize_df_weak(self._conn)
 
     def teardown(self) -> None:
         if self._conn is not None:

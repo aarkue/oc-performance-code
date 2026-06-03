@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from ocpm_bench.harness import registry
+from ocpm_bench.models.primitives import clean_type_name
 from ocpm_bench.patterns.base import PerTypeInputs
 
 # Kuzu requires LIMIT after ORDER BY in WITH; i64::MAX = no real cap
@@ -36,7 +37,9 @@ def run(model, inputs: PerTypeInputs) -> list[tuple]:
             {"object_type": inputs.object_type},
         )
     else:
-        cypher = _VARIANTS_STRONG_CYPHER.format(object_type=inputs.object_type)
+        cypher = _VARIANTS_STRONG_CYPHER.format(
+            object_type=clean_type_name(inputs.object_type)
+        )
         rows = model.execute_cypher(cypher)
     return [(tuple(trace), int(count)) for trace, count in rows]
 

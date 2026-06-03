@@ -1,4 +1,7 @@
-"""W2 via Neo4j (strong): mirror of the Kuzu strong query."""
+"""W2 via Neo4j (strong): latest directly-preceding event's (activity, object
+type) over ``:DF`` edges, counted per pair. ``df.id`` is the object ocel_id,
+``df.EntityType`` the object type. Tie-break: object ocel_id ascending.
+"""
 
 from __future__ import annotations
 
@@ -7,20 +10,10 @@ import sys
 from ocpm_bench.harness import registry
 
 _CYPHER = """
-MATCH (o)<-[:E2O]-(e)
-WITH o, e ORDER BY e.time, e.id
-WITH o, COLLECT({eid: e.id, t: e.time, type: labels(e)[0]}) AS evs
-UNWIND range(1, size(evs) - 1) AS i
-WITH evs[i].eid AS eid,
-     evs[i - 1].t AS pred_t,
-     evs[i - 1].type AS pred_activity,
-     o.id AS o_id,
-     labels(o)[0] AS o_type
-ORDER BY pred_t DESC, o_id ASC
-WITH eid,
-     COLLECT(pred_activity)[0] AS best_act,
-     COLLECT(o_type)[0] AS best_type
-RETURN best_act AS pred_activity, best_type AS o_type, COUNT(*) AS cnt
+MATCH (e2)-[df:DF]->(e)
+WITH e, e2, df ORDER BY e2.time DESC, df.id ASC
+WITH e, COLLECT({act: labels(e2)[0], otype: df.EntityType})[0] AS best
+RETURN best.act AS pred_activity, best.otype AS o_type, COUNT(*) AS cnt
 """
 
 
