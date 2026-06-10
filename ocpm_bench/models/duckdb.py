@@ -17,6 +17,7 @@ from ocpm_bench.harness import cache as _cache
 from ocpm_bench.harness import registry
 from ocpm_bench.models._sql_ocel import SQLOCELPrimitives
 from ocpm_bench.models._versions import package_version, python_version
+from ocpm_bench.models.primitives import thread_cap
 
 _PLACEHOLDER = re.compile(r":([A-Za-z_]\w*)")
 
@@ -86,7 +87,11 @@ class DuckDBModel(SQLOCELPrimitives):
 
     def _connect(self) -> duckdb.DuckDBPyConnection:
         assert self._path is not None
-        return duckdb.connect(str(self._path))
+        con = duckdb.connect(str(self._path))
+        cap = thread_cap()
+        if cap:
+            con.execute(f"SET threads TO {cap}")
+        return con
 
 
 registry.register_model("duckdb", DuckDBModel)

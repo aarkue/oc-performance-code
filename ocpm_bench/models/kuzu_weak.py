@@ -19,6 +19,7 @@ from ocpm_bench.harness import registry
 from ocpm_bench.models._versions import package_version, python_version
 from ocpm_bench.models.kuzu import _kuzu_has_df, execute_cypher, path_size
 from ocpm_bench.models.polars import cached_polars_frames
+from ocpm_bench.models.primitives import thread_cap
 
 
 def _build_weak_kuzu(out_path: Path, frames: dict[str, pl.DataFrame]) -> None:
@@ -163,7 +164,7 @@ class KuzuWeakModel:
             payload_name=f"{dataset.name}-weak.kuzu",
             export=lambda out: _build_weak_kuzu(out, frames),
         )
-        self._db = kuzu.Database(str(self._path))
+        self._db = kuzu.Database(str(self._path), max_num_threads=thread_cap() or 0)
         self._conn = kuzu.Connection(self._db)
         _materialize_df_weak(self._conn)
 

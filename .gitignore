@@ -18,6 +18,7 @@ data/*
 data/bpic17/*
 !data/bpic17/bpic2017-ocel2.canonical.json.gz
 cache/
+run/
 
 # Benchmark results (large, per-machine)
 results/*.jsonl

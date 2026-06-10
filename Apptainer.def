@@ -42,9 +42,9 @@ From: neo4j:5
     uv venv /opt/venv --python 3.14
     . /opt/venv/bin/activate
     uv pip install -e ".[dev]"
-    # r4pm 0.5.5a4 published prerelease (OCPQ microsecond fix), from the index
-    # so the SIF matches the Docker image and native dev env.
-    uv pip install --prerelease=allow "r4pm[polars]==0.5.5a4"
+    # r4pm 0.5.5a6 published prerelease (OCPQ, OPT-1 JSON-bytes FFI, per-event top_k),
+    # from the index so the SIF matches the Docker image and native dev env.
+    uv pip install --prerelease=allow "r4pm[polars]==0.5.5a6"
 
 %environment
     export PATH=/opt/venv/bin:/usr/local/bin:$PATH

@@ -6,6 +6,7 @@ import ocpm_bench.datasets.bpic17
 # Models
 import ocpm_bench.models.duckdb
 import ocpm_bench.models.duckdb_strong_rels
+import ocpm_bench.models.duckdb_weak
 import ocpm_bench.models.kuzu
 import ocpm_bench.models.kuzu_weak
 import ocpm_bench.models.linked_ocel
@@ -14,6 +15,7 @@ import ocpm_bench.models.pandas
 import ocpm_bench.models.polars
 import ocpm_bench.models.sqlite_mem
 import ocpm_bench.models.sqlite_mem_strong_rels
+import ocpm_bench.models.sqlite_mem_weak
 
 # Pattern: dfg
 import ocpm_bench.patterns.dfg
@@ -55,16 +57,16 @@ import ocpm_bench.patterns.kpi_heatmap.neo4j_strong
 import ocpm_bench.patterns.kpi_heatmap.pandas
 import ocpm_bench.patterns.kpi_heatmap.polars
 
-# Pattern: oc_perf_delaying (P3 / W2)
-import ocpm_bench.patterns.oc_perf_delaying
-import ocpm_bench.patterns.oc_perf_delaying._sql
-import ocpm_bench.patterns.oc_perf_delaying.kuzu
-import ocpm_bench.patterns.oc_perf_delaying.linked_ocel
-import ocpm_bench.patterns.oc_perf_delaying.neo4j_strong
-import ocpm_bench.patterns.oc_perf_delaying.pandas
-import ocpm_bench.patterns.oc_perf_delaying.polars
+# Pattern: oc_perf_sojourn (P3 / Sojourn)
+import ocpm_bench.patterns.oc_perf_sojourn
+import ocpm_bench.patterns.oc_perf_sojourn._sql
+import ocpm_bench.patterns.oc_perf_sojourn.kuzu
+import ocpm_bench.patterns.oc_perf_sojourn.linked_ocel
+import ocpm_bench.patterns.oc_perf_sojourn.neo4j_strong
+import ocpm_bench.patterns.oc_perf_sojourn.pandas
+import ocpm_bench.patterns.oc_perf_sojourn.polars
 
-# Pattern: oc_perf_sync (P3 / W1)
+# Pattern: oc_perf_sync (P3 / Sync)
 import ocpm_bench.patterns.oc_perf_sync
 import ocpm_bench.patterns.oc_perf_sync._sql
 import ocpm_bench.patterns.oc_perf_sync.kuzu

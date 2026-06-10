@@ -43,7 +43,7 @@ cells:
   - { model: sqlite_mem,              pattern: ocpq,     dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: ocpq,     dataset: bpic17 }
 
-  # W1 / oc_perf_sync (P3)
+  # Sync / oc_perf_sync (P3)
   - { model: linked_ocel,             pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: duckdb,                  pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: duckdb_strong_rels,      pattern: oc_perf_sync,     dataset: bpic17 }
@@ -55,17 +55,17 @@ cells:
   - { model: sqlite_mem,              pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: oc_perf_sync,     dataset: bpic17 }
 
-  # W2 / oc_perf_delaying (P3)
-  - { model: linked_ocel,             pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: duckdb,                  pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: duckdb_strong_rels,      pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: kuzu,                    pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: kuzu_weak,               pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: neo4j_strong,            pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: polars,                  pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: pandas,                  pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: sqlite_mem,              pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: sqlite_mem_strong_rels,  pattern: oc_perf_delaying, dataset: bpic17 }
+  # Sojourn / oc_perf_sojourn (P3)
+  - { model: linked_ocel,             pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: duckdb,                  pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: kuzu,                    pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: neo4j_strong,            pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: polars,                  pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: pandas,                  pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: sqlite_mem,              pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels,  pattern: oc_perf_sojourn, dataset: bpic17 }
 
   # K1 / kpi_heatmap (P4)
   - { model: linked_ocel,             pattern: kpi_heatmap,      dataset: bpic17 }

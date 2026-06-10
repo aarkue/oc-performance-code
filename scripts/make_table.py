@@ -14,16 +14,20 @@ Layout (main table):
   - The fastest model per pattern column is bolded; cells are tinted by
     log-time relative to the column min.
 
-Layout (typing table):
-  - Compact 3xN matrix: rows are engines, columns are corpora, cells are
-    the geometric mean of weak/strong speedups across the corpus's patterns.
-  - Speedup > 1.0 favours strong typing (teal), < 1.0 favours weak (red).
+Layout (typing tables):
+  - Compact matrix: rows are engines, columns are corpora, cells are the
+    geometric mean of base/variant speedups across the corpus's patterns.
+  - Two tables: node typing (weak -> default, i.e. typed entity tables)
+    and edge typing (default -> strong_rels, i.e. per-pair relation
+    tables; SQLite and DuckDB only).
+  - Speedup > 1.0 favours the variant (teal), < 1.0 the base (red).
   - Bold marks |effect| >= 20%; raw ms lives in the main table.
 
 CLI:
     python make_table.py --input results/paper-all.jsonl \\
         --output paper-overleaf/tables/main.tex \\
-        --typing-output paper-overleaf/tables/typing.tex
+        --typing-output paper-overleaf/tables/typing.tex \\
+        --typing-rels-output paper-overleaf/tables/typing_rels.tex
 """
 
 from __future__ import annotations
@@ -49,15 +53,21 @@ MODEL_FAMILIES: list[tuple[str, list[tuple[str, str]]]] = [
 PATTERN_FAMILIES: list[tuple[str, list[tuple[list[str], str]]]] = [
     ("P1: Control flow", [(["dfg"], "DFG"), (["variants"], "Variants")]),
     ("P2: Queries",      [(["ocpq"], "OCPQ"), (["ekg"], "EKG")]),
-    ("P3: OC-Perf",      [(["oc_perf_sync"], "W1"), (["oc_perf_delaying"], "W2")]),
+    ("P3: OC-Perf",      [(["oc_perf_sync"], "Sync"), (["oc_perf_sojourn"], "Sojourn")]),
     ("P4: BI/KPI",       [(["kpi_heatmap"], "K1"), (["kpi_conversion"], "K2")]),
 ]
 
-# (Engine label, weak model_key, strong model_key)
-TYPING_PAIRS: list[tuple[str, str, str]] = [
+# (Engine label, base model_key, variant model_key); speedup = base/variant.
+# Node typing: weak -> default (typed entity tables).
+NODE_TYPING_PAIRS: list[tuple[str, str, str]] = [
+    ("SQLite", "sqlite_mem_weak", "sqlite_mem"),
+    ("DuckDB", "duckdb_weak",     "duckdb"),
+    ("Kuzu",   "kuzu_weak",       "kuzu"),
+]
+# Edge typing: default -> strong_rels (per-pair relation tables); no Kuzu variant.
+EDGE_TYPING_PAIRS: list[tuple[str, str, str]] = [
     ("SQLite", "sqlite_mem", "sqlite_mem_strong_rels"),
     ("DuckDB", "duckdb",     "duckdb_strong_rels"),
-    ("Kuzu",   "kuzu_weak",  "kuzu"),
 ]
 
 INNER_STATS: dict[str, Callable[[list[float]], float]] = {
@@ -220,9 +230,11 @@ def build_table(
         r"Warm runs only, cold excluded. Cells in each column's fastest band "
         r"are in bold. Cells are "
         r"shaded by order-of-magnitude band, darker = faster: under 10\,ms, "
-        r"under 100\,ms, under 1\,s, and at or above 1\,s. \texttt{SQLite} and "
-        r"\texttt{DuckDB} use the weak schema, \texttt{Kuzu} the strong schema. "
-        r"\autoref{tab:typing-results} reports per-engine weak/strong speedups. "
+        r"under 100\,ms, under 1\,s, and at or above 1\,s. \texttt{SQLite}, "
+        r"\texttt{DuckDB}, and \texttt{Kuzu} use the default schema (typed "
+        r"entity tables, generic relation tables). "
+        r"\autoref{tab:typing-results} and \autoref{tab:typing-rels-results} "
+        r"report the schema-typing speedups. "
         r"The 10 warm runs per cell vary by about 5\% (median across cells)."
     )
 
@@ -279,8 +291,29 @@ def _speedup_tint(speedup: float) -> tuple[str, int]:
     return hue, intensity
 
 
+NODE_TYPING_CAPTION = (
+    r"Speedup of typed entity tables (default schema) over the weak schema "
+    r"on BPIC17 ($\text{weak ms}/\text{default ms}$): $>1.0$ favours typed "
+    r"entity tables (teal) and $<1.0$ the weak schema (red). Bold marks "
+    r"effects $\geq$20\%. Per-corpus speedup is the geometric mean over its "
+    r"patterns; -- marks corpora where the weak schema exceeded the time "
+    r"budget. \autoref{tab:main-results} reports the default variant."
+)
+
+EDGE_TYPING_CAPTION = (
+    r"Speedup of per-pair relation tables (strong-rels schema) over the "
+    r"default schema's generic relation tables on BPIC17 "
+    r"($\text{default ms}/\text{strong-rels ms}$): $>1.0$ favours per-pair "
+    r"tables (teal) and $<1.0$ generic tables (red). Bold marks effects "
+    r"$\geq$20\%. Per-corpus speedup is the geometric mean over its "
+    r"patterns. Both variants use typed entity tables; \texttt{Kuzu} has "
+    r"no per-pair variant."
+)
+
+
 def build_typing_table(
     data: dict[str, dict[str, list[float]]],
+    pairs: list[tuple[str, str, str]], caption_body: str, label: str,
     enable_color: bool, enable_bold: bool, draft_note: str | None = None,
 ) -> str:
     corpora = _flat_patterns()
@@ -292,15 +325,8 @@ def build_typing_table(
         caption_parts.append(
             r"\textcolor{red}{\textbf{Draft:}} " + draft_note + " "
         )
-    caption_parts.append(
-        r"Speedup of strong over weak typing on BPIC17 "
-        r"($\text{weak ms}/\text{strong ms}$): $>1.0$ favours strong (teal) "
-        r"and $<1.0$ favours weak (red). Bold marks effects $\geq$20\%. "
-        r"Per-corpus speedup is the geometric mean over its patterns. "
-        r"\autoref{tab:main-results} reports the weak variant for "
-        r"SQLite and DuckDB and the strong variant for Kuzu."
-    )
-    lines.append(r"\caption{" + "".join(caption_parts) + r"}\label{tab:typing-results}")
+    caption_parts.append(caption_body)
+    lines.append(r"\caption{" + "".join(caption_parts) + r"}\label{" + label + r"}")
     lines += [
         r"\centering",
         r"\footnotesize",
@@ -312,20 +338,20 @@ def build_typing_table(
         r"\midrule",
     ]
 
-    for engine_label, weak_key, strong_key in TYPING_PAIRS:
+    for engine_label, base_key, variant_key in pairs:
         row_cells: list[str] = [engine_label]
         for pat_keys, _ in corpora:
             ratios: list[float] = []
             for pat_key in pat_keys:
-                weak_inst = data.get(pat_key, {}).get(weak_key, [])
-                strong_inst = data.get(pat_key, {}).get(strong_key, [])
-                if not weak_inst or not strong_inst:
+                base_inst = data.get(pat_key, {}).get(base_key, [])
+                variant_inst = data.get(pat_key, {}).get(variant_key, [])
+                if not base_inst or not variant_inst:
                     continue
-                weak_mean, _ = _aggregate(weak_inst)
-                strong_mean, _ = _aggregate(strong_inst)
-                if not (strong_mean > 0 and weak_mean > 0):
+                base_mean, _ = _aggregate(base_inst)
+                variant_mean, _ = _aggregate(variant_inst)
+                if not (variant_mean > 0 and base_mean > 0):
                     continue
-                ratios.append(weak_mean / strong_mean)
+                ratios.append(base_mean / variant_mean)
             if not ratios:
                 row_cells.append(r"\multicolumn{1}{c}{--}")
                 continue
@@ -351,7 +377,9 @@ def main() -> None:
     ap.add_argument("--output", type=Path, required=True,
                     help="LaTeX output path for the main table.")
     ap.add_argument("--typing-output", type=Path, default=None,
-                    help="If set, also write the typing sub-study table here.")
+                    help="If set, write the node-typing table (weak -> default) here.")
+    ap.add_argument("--typing-rels-output", type=Path, default=None,
+                    help="If set, write the edge-typing table (default -> strong_rels) here.")
     ap.add_argument("--inner-stat", choices=sorted(INNER_STATS), default="mean")
     ap.add_argument("--on-incorrect", choices=("drop", "include", "error"), default="drop")
     ap.add_argument("--no-color", action="store_true")
@@ -375,13 +403,22 @@ def main() -> None:
     for pat in sorted(data):
         print(f"  {pat:14s}: {sorted(data[pat])}")
 
-    if args.typing_output is not None:
-        args.typing_output.parent.mkdir(parents=True, exist_ok=True)
-        args.typing_output.write_text(build_typing_table(
-            data, enable_color=not args.no_color, enable_bold=not args.no_bold,
+    typing_jobs = [
+        (args.typing_output, NODE_TYPING_PAIRS, NODE_TYPING_CAPTION,
+         "tab:typing-results"),
+        (args.typing_rels_output, EDGE_TYPING_PAIRS, EDGE_TYPING_CAPTION,
+         "tab:typing-rels-results"),
+    ]
+    for out_path, pairs, caption, label in typing_jobs:
+        if out_path is None:
+            continue
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(build_typing_table(
+            data, pairs=pairs, caption_body=caption, label=label,
+            enable_color=not args.no_color, enable_bold=not args.no_bold,
             draft_note=args.draft_note,
         ))
-        print(f"wrote {args.typing_output}")
+        print(f"wrote {out_path}")
 
 
 if __name__ == "__main__":

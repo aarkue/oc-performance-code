@@ -83,6 +83,14 @@ class SQLOCELPrimitives:
             {"o": object_id},
         )]
 
+    def event_times_union(self) -> str:
+        """CTE body yielding ``(ocel_id, ocel_time)`` for every event.
+
+        The strong schema unions the per-activity timestamp tables; the weak
+        schema overrides this to read the consolidated ``event`` table directly.
+        """
+        return build_event_times_union(self.execute_sql)  # type: ignore[attr-defined]
+
 
 def build_event_times_union(execute_sql: Callable[[str], list[tuple]]) -> str:
     """Return a UNION ALL CTE over each `event_<type>(ocel_id, ocel_time)` table.

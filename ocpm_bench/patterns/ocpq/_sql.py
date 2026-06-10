@@ -13,5 +13,6 @@ def run(model, inputs: OCPQInputs) -> list[tuple]:
     return model.execute_sql(sql)
 
 
-for _m in ("sqlite_mem", "duckdb", "sqlite_mem_strong_rels", "duckdb_strong_rels"):
+for _m in ("sqlite_mem", "duckdb", "sqlite_mem_strong_rels", "duckdb_strong_rels",
+           "sqlite_mem_weak", "duckdb_weak"):
     registry.register_impl("ocpq", _m, sys.modules[__name__])

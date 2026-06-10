@@ -1,4 +1,8 @@
-# Combined paper matrix: all patterns x all engines.
+# Combined paper matrix: all patterns x all engines, including the schema-typing
+# variants. Per pattern: default-schema engines, plus the weak (sqlite_mem_weak,
+# duckdb_weak, kuzu_weak) and strong-rels (sqlite_mem_strong_rels,
+# duckdb_strong_rels) variants. The typing sub-study is a filtered view of these
+# results: weak <-> default = node typing; default <-> strong_rels = edge typing.
 
 repetitions: 10
 matrix_passes: 1
@@ -18,6 +22,8 @@ cells:
   - { model: pandas,                  pattern: dfg,      dataset: bpic17 }
   - { model: sqlite_mem,              pattern: dfg,      dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: dfg,      dataset: bpic17 }
+  - { model: sqlite_mem_weak,         pattern: dfg,      dataset: bpic17 }
+  - { model: duckdb_weak,             pattern: dfg,      dataset: bpic17 }
 
   # Variants
   - { model: linked_ocel,             pattern: variants, dataset: bpic17 }
@@ -30,6 +36,8 @@ cells:
   - { model: pandas,                  pattern: variants, dataset: bpic17 }
   - { model: sqlite_mem,              pattern: variants, dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: variants, dataset: bpic17 }
+  - { model: sqlite_mem_weak,         pattern: variants, dataset: bpic17 }
+  - { model: duckdb_weak,             pattern: variants, dataset: bpic17 }
 
   # OCPQ
   - { model: linked_ocel,             pattern: ocpq,     dataset: bpic17 }
@@ -42,8 +50,10 @@ cells:
   - { model: pandas,                  pattern: ocpq,     dataset: bpic17 }
   - { model: sqlite_mem,              pattern: ocpq,     dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: ocpq,     dataset: bpic17 }
+  - { model: sqlite_mem_weak,         pattern: ocpq,     dataset: bpic17 }
+  - { model: duckdb_weak,             pattern: ocpq,     dataset: bpic17 }
 
-  # W1 / oc_perf_sync (P3)
+  # Sync / oc_perf_sync (P3)
   - { model: linked_ocel,             pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: duckdb,                  pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: duckdb_strong_rels,      pattern: oc_perf_sync,     dataset: bpic17 }
@@ -54,18 +64,22 @@ cells:
   - { model: pandas,                  pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: sqlite_mem,              pattern: oc_perf_sync,     dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: oc_perf_sync,     dataset: bpic17 }
+  - { model: sqlite_mem_weak,         pattern: oc_perf_sync,     dataset: bpic17 }
+  - { model: duckdb_weak,             pattern: oc_perf_sync,     dataset: bpic17 }
 
-  # W2 / oc_perf_delaying (P3)
-  - { model: linked_ocel,             pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: duckdb,                  pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: duckdb_strong_rels,      pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: kuzu,                    pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: kuzu_weak,               pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: neo4j_strong,            pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: polars,                  pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: pandas,                  pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: sqlite_mem,              pattern: oc_perf_delaying, dataset: bpic17 }
-  - { model: sqlite_mem_strong_rels,  pattern: oc_perf_delaying, dataset: bpic17 }
+  # Sojourn / oc_perf_sojourn (P3)
+  - { model: linked_ocel,             pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: duckdb,                  pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: duckdb_strong_rels,      pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: kuzu,                    pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: kuzu_weak,               pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: neo4j_strong,            pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: polars,                  pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: pandas,                  pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: sqlite_mem,              pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: sqlite_mem_strong_rels,  pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: sqlite_mem_weak,         pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: duckdb_weak,             pattern: oc_perf_sojourn, dataset: bpic17 }
 
   # K1 / kpi_heatmap (P4)
   - { model: linked_ocel,             pattern: kpi_heatmap,      dataset: bpic17 }
@@ -78,6 +92,8 @@ cells:
   - { model: pandas,                  pattern: kpi_heatmap,      dataset: bpic17 }
   - { model: sqlite_mem,              pattern: kpi_heatmap,      dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: kpi_heatmap,      dataset: bpic17 }
+  - { model: sqlite_mem_weak,         pattern: kpi_heatmap,      dataset: bpic17 }
+  - { model: duckdb_weak,             pattern: kpi_heatmap,      dataset: bpic17 }
 
   # K2 / kpi_conversion (P4)
   - { model: linked_ocel,             pattern: kpi_conversion,   dataset: bpic17 }
@@ -90,6 +106,8 @@ cells:
   - { model: pandas,                  pattern: kpi_conversion,   dataset: bpic17 }
   - { model: sqlite_mem,              pattern: kpi_conversion,   dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: kpi_conversion,   dataset: bpic17 }
+  - { model: sqlite_mem_weak,         pattern: kpi_conversion,   dataset: bpic17 }
+  - { model: duckdb_weak,             pattern: kpi_conversion,   dataset: bpic17 }
 
   # EKG (P2 graph-query corpus, Q1-Q3).
   - { model: linked_ocel,             pattern: ekg,      dataset: bpic17 }
@@ -102,3 +120,5 @@ cells:
   - { model: pandas,                  pattern: ekg,      dataset: bpic17 }
   - { model: sqlite_mem,              pattern: ekg,      dataset: bpic17 }
   - { model: sqlite_mem_strong_rels,  pattern: ekg,      dataset: bpic17 }
+  - { model: sqlite_mem_weak,         pattern: ekg,      dataset: bpic17 }
+  - { model: duckdb_weak,             pattern: ekg,      dataset: bpic17 }

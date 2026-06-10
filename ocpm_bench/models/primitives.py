@@ -7,7 +7,19 @@ backings, isolating data-access cost from engine-native pushdown.
 
 from __future__ import annotations
 
+import os
 from typing import Protocol, runtime_checkable
+
+
+def thread_cap() -> int | None:
+    """Thread cap from ``OCPM_THREADS`` (set by the runner), or None if unset.
+
+    Engines that auto-detect cores (DuckDB, Kuzu) ignore the process CPU
+    affinity and would oversubscribe the pinned cores; this caps them to match
+    the affinity-aware engines (Polars, rayon) for a fair comparison.
+    """
+    v = os.environ.get("OCPM_THREADS")
+    return int(v) if v else None
 
 
 def clean_type_name(name: str) -> str:

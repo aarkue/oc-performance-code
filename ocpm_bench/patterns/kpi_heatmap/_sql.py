@@ -30,5 +30,6 @@ def run(model, _inputs) -> list[tuple[str, str, int]]:
     ]
 
 
-for _m in ("sqlite_mem", "duckdb", "sqlite_mem_strong_rels", "duckdb_strong_rels"):
+for _m in ("sqlite_mem", "duckdb", "sqlite_mem_strong_rels", "duckdb_strong_rels",
+           "sqlite_mem_weak", "duckdb_weak"):
     registry.register_impl("kpi_heatmap", _m, sys.modules[__name__])

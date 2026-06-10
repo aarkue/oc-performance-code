@@ -1,4 +1,4 @@
-"""W1 via Polars: df-edge based via per-object shift after sort."""
+"""Sync via Polars: per-event span + delaying object."""
 
 from __future__ import annotations
 
@@ -8,32 +8,35 @@ import polars as pl
 
 from ocpm_bench.harness import registry
 from ocpm_bench.models.polars import PolarsModel
+from ocpm_bench.patterns._perf_topk import perf_top_k
 
 
-def run(model: PolarsModel, _inputs) -> list[tuple[str, int, int]]:
-    rel = (
+def run(model: PolarsModel, _inputs) -> list[tuple[str, int, str]]:
+    base = (
         model.relations.lazy()
-        .select(["ocel:eid", "ocel:activity", "ocel:timestamp", "ocel:oid"])
-        .sort(["ocel:oid", "ocel:timestamp", "ocel:eid"])
-        .with_columns(
-            pred_t=pl.col("ocel:timestamp").shift(1).over("ocel:oid"),
-        )
-        .filter(pl.col("pred_t").is_not_null())
+        .select([
+            pl.col("ocel:eid"),
+            pl.col("ocel:oid"),
+            pl.col("ocel:timestamp").dt.timestamp("us").alias("t_us"),
+        ])
+        .sort(["ocel:oid", "t_us", "ocel:eid"])
+        .with_columns(pred_us=pl.col("t_us").shift(1).over("ocel:oid"))
+        .filter(pl.col("pred_us").is_not_null())
     )
-
-    per_event = rel.group_by(["ocel:eid", "ocel:activity"]).agg(
-        t_min=pl.col("pred_t").min(),
-        t_max=pl.col("pred_t").max(),
-    ).with_columns(
-        span_s=((pl.col("t_max") - pl.col("t_min")).dt.total_seconds()).cast(pl.Int64)
+    span = base.group_by("ocel:eid").agg(
+        (pl.col("pred_us").max() - pl.col("pred_us").min()).alias("sync_us")
     )
-
-    out = per_event.group_by("ocel:activity").agg(
-        total=pl.col("span_s").sum(),
-        count=pl.col("span_s").count(),
-    ).collect()
-
-    return [(str(row[0]), int(row[1]), int(row[2])) for row in out.iter_rows()]
+    delaying = (
+        base.sort(["ocel:eid", "pred_us", "ocel:oid"], descending=[False, True, False])
+        .group_by("ocel:eid", maintain_order=True)
+        .agg(pl.col("ocel:oid").first().alias("delaying_object"))
+    )
+    joined = span.join(delaying, on="ocel:eid")
+    k = perf_top_k()
+    if k is not None:
+        joined = joined.sort(["sync_us", "ocel:eid"], descending=[True, False]).head(k)
+    out = joined.collect()
+    return [(str(e), int(s), str(o)) for e, s, o in out.iter_rows()]
 
 
 registry.register_impl("oc_perf_sync", "polars", sys.modules[__name__])

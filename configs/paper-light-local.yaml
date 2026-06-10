@@ -1,0 +1,40 @@
+# Local diagnostic: paper-light cells, thread-capped, separate output.
+# Compare ranking vs the HPC paper-light run under matched (capped) conditions.
+repetitions: 10
+matrix_passes: 1
+randomize_cell_order: true
+cell_timeout_seconds: 3600
+results_path: results/paper-light-local.jsonl
+
+cells:
+  - { model: linked_ocel, pattern: dfg,            dataset: bpic17 }
+  - { model: duckdb,      pattern: dfg,            dataset: bpic17 }
+  - { model: polars,      pattern: dfg,            dataset: bpic17 }
+
+  - { model: linked_ocel, pattern: variants,       dataset: bpic17 }
+  - { model: duckdb,      pattern: variants,       dataset: bpic17 }
+  - { model: polars,      pattern: variants,       dataset: bpic17 }
+
+  - { model: linked_ocel, pattern: ocpq,           dataset: bpic17 }
+  - { model: duckdb,      pattern: ocpq,           dataset: bpic17 }
+  - { model: polars,      pattern: ocpq,           dataset: bpic17 }
+
+  - { model: linked_ocel, pattern: oc_perf_sync,   dataset: bpic17 }
+  - { model: duckdb,      pattern: oc_perf_sync,   dataset: bpic17 }
+  - { model: polars,      pattern: oc_perf_sync,   dataset: bpic17 }
+
+  - { model: linked_ocel, pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: duckdb,      pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: polars,      pattern: oc_perf_sojourn, dataset: bpic17 }
+
+  - { model: linked_ocel, pattern: kpi_heatmap,    dataset: bpic17 }
+  - { model: duckdb,      pattern: kpi_heatmap,    dataset: bpic17 }
+  - { model: polars,      pattern: kpi_heatmap,    dataset: bpic17 }
+
+  - { model: linked_ocel, pattern: kpi_conversion, dataset: bpic17 }
+  - { model: duckdb,      pattern: kpi_conversion, dataset: bpic17 }
+  - { model: polars,      pattern: kpi_conversion, dataset: bpic17 }
+
+  - { model: linked_ocel, pattern: ekg,            dataset: bpic17 }
+  - { model: duckdb,      pattern: ekg,            dataset: bpic17 }
+  - { model: polars,      pattern: ekg,            dataset: bpic17 }

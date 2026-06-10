@@ -1,9 +1,8 @@
-"""Sync via SQLite/DuckDB: per-event span over directly-preceding events.
+"""Sojourn via SQLite/DuckDB: per-event time since the latest predecessor.
 
-Per object, the immediate predecessor of an event is found with
-``LAG`` ordered by time. Per event, the span between the earliest and latest
-predecessor is the synchronization time, and the latest predecessor's object is
-the delaying object. Times are integer microseconds since epoch.
+Per object, the immediate predecessor of an event is found with ``LAG``. Per
+event, the sojourn time is the event's own time minus its latest predecessor,
+in integer microseconds since epoch.
 """
 
 from __future__ import annotations
@@ -13,8 +12,6 @@ import sys
 from ocpm_bench.harness import registry
 from ocpm_bench.patterns._perf_topk import perf_top_k
 
-# Per-engine microsecond extraction of `et.ocel_time`. SQLite stores ISO strings
-# (parsed to int64 micros); DuckDB has a native epoch_us.
 _US_DUCKDB = "epoch_us(et.ocel_time)"
 _US_SQLITE = (
     "unixepoch(substr(et.ocel_time, 1, 19)) * 1000000 + "
@@ -30,19 +27,12 @@ event_obj AS (
     JOIN event_times et ON et.ocel_id = eo.ocel_event_id
 ),
 preds AS (
-    SELECT eid, oid,
+    SELECT eid, t_us AS e_us,
            LAG(t_us) OVER (PARTITION BY oid ORDER BY t_us, eid) AS pred_us
     FROM event_obj
-),
-ranked AS (
-    SELECT eid, oid,
-           MIN(pred_us) OVER (PARTITION BY eid) AS earliest,
-           MAX(pred_us) OVER (PARTITION BY eid) AS latest,
-           ROW_NUMBER() OVER (PARTITION BY eid ORDER BY pred_us DESC, oid ASC) AS rn
-    FROM preds WHERE pred_us IS NOT NULL
 )
-SELECT eid, latest - earliest AS sync_us, oid AS delaying_object
-FROM ranked WHERE rn = 1
+SELECT eid, MAX(e_us) - MAX(pred_us) AS sojourn_us
+FROM preds WHERE pred_us IS NOT NULL GROUP BY eid
 """
 
 
@@ -50,17 +40,17 @@ def pre_run(model) -> None:
     model._union_cte = model.event_times_union()
 
 
-def run(model, _inputs) -> list[tuple[str, int, str]]:
+def run(model, _inputs) -> list[tuple[str, int]]:
     union_cte = getattr(model, "_union_cte", None) or model.event_times_union()
     us = _US_SQLITE if model.name.startswith("sqlite") else _US_DUCKDB
     sql = _SQL.format(union_cte=union_cte, us=us)
     k = perf_top_k()
     if k is not None:
-        sql += f"\nORDER BY sync_us DESC, eid ASC\nLIMIT {k}"
+        sql += f"\nORDER BY sojourn_us DESC, eid ASC\nLIMIT {k}"
     rows = model.execute_sql(sql)
-    return [(str(eid), int(s), str(o)) for eid, s, o in rows]
+    return [(str(eid), int(s)) for eid, s in rows]
 
 
 for _m in ("sqlite_mem", "duckdb", "sqlite_mem_strong_rels", "duckdb_strong_rels",
            "sqlite_mem_weak", "duckdb_weak"):
-    registry.register_impl("oc_perf_sync", _m, sys.modules[__name__])
+    registry.register_impl("oc_perf_sojourn", _m, sys.modules[__name__])

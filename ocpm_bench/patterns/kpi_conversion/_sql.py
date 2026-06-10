@@ -70,5 +70,6 @@ def run(model, inputs: KPIConversionInputs) -> float:
     return float(rows[0][0]) if rows and rows[0][0] is not None else 0.0
 
 
-for _m in ("sqlite_mem", "duckdb", "sqlite_mem_strong_rels", "duckdb_strong_rels"):
+for _m in ("sqlite_mem", "duckdb", "sqlite_mem_strong_rels", "duckdb_strong_rels",
+           "sqlite_mem_weak", "duckdb_weak"):
     registry.register_impl("kpi_conversion", _m, sys.modules[__name__])

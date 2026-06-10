@@ -8,7 +8,7 @@
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --hint=nomultithread
-#SBATCH --time=08:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=ocpm-bench-%j.log
 
 set -euo pipefail
@@ -78,11 +78,19 @@ echo "[run-apptainer] pinning cpus=$TASKSET_CPUS numa=${NUMA_FLAGS[*]}"
 taskset -c "$TASKSET_CPUS" \
   numactl "${NUMA_FLAGS[@]}" \
   apptainer run --cleanenv --writable-tmpfs \
-    --env NEO4J_server_memory_heap_max__size=8G \
+    --env NEO4J_server_memory_heap_max__size="${NEO4J_HEAP:-8G}" \
+    --env OCPM_THREADS="$N_THREADS" \
+    --env RAYON_NUM_THREADS="$N_THREADS" \
+    --env POLARS_MAX_THREADS="$N_THREADS" \
+    --env OMP_NUM_THREADS="$N_THREADS" \
+    --env OPENBLAS_NUM_THREADS="$N_THREADS" \
+    --env MKL_NUM_THREADS="$N_THREADS" \
+    --env NUMEXPR_NUM_THREADS="$N_THREADS" \
     --bind "$RUN_DIR/neo4j-data:/data" \
     --bind "$RUN_DIR/neo4j-import:/var/lib/neo4j/import" \
     --bind "$RUN_DIR/results:/app/results" \
     --bind "$JOB_CACHE:/app/cache" \
+    --bind "$REPO_DIR/configs:/app/configs" \
     "$SIF" matrix --prepare --spec "configs/$CONFIG"
 
 echo "results: $OUT_DIR"

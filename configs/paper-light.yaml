@@ -1,0 +1,58 @@
+# Light paper matrix: all patterns x {linked_ocel (rust4pm), duckdb, kuzu, polars}.
+# Default-schema engines only -- drops sqlite/pandas/neo4j and the weak/strong_rels
+# typing variants from paper-all.yaml. linked_ocel first (it is the oracle).
+
+repetitions: 10
+matrix_passes: 1
+randomize_cell_order: true
+cell_timeout_seconds: 3600
+results_path: results/paper-light.jsonl
+
+cells:
+  # # DFG
+  # - { model: linked_ocel, pattern: dfg,            dataset: bpic17 }
+  # - { model: duckdb,      pattern: dfg,            dataset: bpic17 }
+  # # - { model: kuzu,        pattern: dfg,            dataset: bpic17 }
+  # - { model: polars,      pattern: dfg,            dataset: bpic17 }
+
+  # # Variants
+  # - { model: linked_ocel, pattern: variants,       dataset: bpic17 }
+  # - { model: duckdb,      pattern: variants,       dataset: bpic17 }
+  # # - { model: kuzu,        pattern: variants,       dataset: bpic17 }
+  # - { model: polars,      pattern: variants,       dataset: bpic17 }
+
+  # # OCPQ
+  # - { model: linked_ocel, pattern: ocpq,           dataset: bpic17 }
+  # - { model: duckdb,      pattern: ocpq,           dataset: bpic17 }
+  # # - { model: kuzu,        pattern: ocpq,           dataset: bpic17 }
+  # - { model: polars,      pattern: ocpq,           dataset: bpic17 }
+
+  # Sync / oc_perf_sync (P3)
+  - { model: linked_ocel, pattern: oc_perf_sync,   dataset: bpic17 }
+  - { model: duckdb,      pattern: oc_perf_sync,   dataset: bpic17 }
+  # - { model: kuzu,        pattern: oc_perf_sync,   dataset: bpic17 }
+  - { model: polars,      pattern: oc_perf_sync,   dataset: bpic17 }
+
+  # Sojourn / oc_perf_sojourn (P3)
+  - { model: linked_ocel, pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: duckdb,      pattern: oc_perf_sojourn, dataset: bpic17 }
+  # - { model: kuzu,        pattern: oc_perf_sojourn, dataset: bpic17 }
+  - { model: polars,      pattern: oc_perf_sojourn, dataset: bpic17 }
+
+  # # K1 / kpi_heatmap (P4)
+  # - { model: linked_ocel, pattern: kpi_heatmap,    dataset: bpic17 }
+  # - { model: duckdb,      pattern: kpi_heatmap,    dataset: bpic17 }
+  # # - { model: kuzu,        pattern: kpi_heatmap,    dataset: bpic17 }
+  # - { model: polars,      pattern: kpi_heatmap,    dataset: bpic17 }
+
+  # # K2 / kpi_conversion (P4)
+  # - { model: linked_ocel, pattern: kpi_conversion, dataset: bpic17 }
+  # - { model: duckdb,      pattern: kpi_conversion, dataset: bpic17 }
+  # # - { model: kuzu,        pattern: kpi_conversion, dataset: bpic17 }
+  # - { model: polars,      pattern: kpi_conversion, dataset: bpic17 }
+
+  # # EKG (P2 graph-query corpus, Q1-Q3)
+  # - { model: linked_ocel, pattern: ekg,            dataset: bpic17 }
+  # - { model: duckdb,      pattern: ekg,            dataset: bpic17 }
+  # # - { model: kuzu,        pattern: ekg,            dataset: bpic17 }
+  # - { model: polars,      pattern: ekg,            dataset: bpic17 }

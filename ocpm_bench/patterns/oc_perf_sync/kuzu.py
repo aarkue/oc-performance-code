@@ -1,60 +1,48 @@
-"""W1 via Kuzu (strong + weak).
+"""Sync via Kuzu (strong + weak): per-event span + delaying object.
 
-Kuzu rejects nested aggregation, so per-event predecessor timestamps are
-emitted as flat rows and aggregated (min/max -> span) in Python.
+Incoming ``:DF`` edges are an event's directly-preceding events (one per shared
+object). The span is ``MAX - MIN`` of their times; the delaying object is the
+``df.id`` of the latest one, picked with a ``list_reduce`` argmax (tie-break on
+object ocel_id). All in-engine, no Python aggregation.
 """
 
 from __future__ import annotations
 
 import sys
-from collections import defaultdict
 
 from ocpm_bench.harness import registry
+from ocpm_bench.patterns._perf_topk import perf_top_k
 
-# Incoming :DF edges = directly-preceding events (one per shared object).
-_STRONG_CYPHER = """
-MATCH (e2)-[:DF]->(e)
-RETURN e.id AS eid,
-       LABEL(e) AS activity,
-       (to_epoch_ms(e2.time) / 1000) * 1000000
-         + (date_part('microsecond', e2.time) % 1000000) AS pred_us
+_PRED_US = "to_epoch_ms(e2.time)*1000 + date_part('microsecond',e2.time)%1000"
+
+_STRONG = f"""
+MATCH (e2)-[df:DF]->(e)
+WITH e.id AS eid, df.id AS oid, {_PRED_US} AS pt
+WITH eid, MIN(pt) AS mn, MAX(pt) AS mx, COLLECT({{pt: pt, oid: oid}}) AS c
+WITH eid, mn, mx,
+     list_reduce(c, (a, x) ->
+        CASE WHEN x.pt > a.pt OR (x.pt = a.pt AND x.oid < a.oid) THEN x ELSE a END) AS best
+RETURN eid, (mx - mn) AS sync_us, best.oid AS delaying_object
 """
 
-# Weak: same, activity from the node `type` column (single Event label).
-_WEAK_CYPHER = """
-MATCH (e2:Event)-[:DF]->(e:Event)
-RETURN e.id AS eid,
-       e.type AS activity,
-       (to_epoch_ms(e2.time) / 1000) * 1000000
-         + (date_part('microsecond', e2.time) % 1000000) AS pred_us
+_WEAK = f"""
+MATCH (e2:Event)-[df:DF]->(e:Event)
+WITH e.id AS eid, df.id AS oid, {_PRED_US} AS pt
+WITH eid, MIN(pt) AS mn, MAX(pt) AS mx, COLLECT({{pt: pt, oid: oid}}) AS c
+WITH eid, mn, mx,
+     list_reduce(c, (a, x) ->
+        CASE WHEN x.pt > a.pt OR (x.pt = a.pt AND x.oid < a.oid) THEN x ELSE a END) AS best
+RETURN eid, (mx - mn) AS sync_us, best.oid AS delaying_object
 """
 
 
-def run(model, _inputs) -> list[tuple[str, int, int]]:
-    if model.name == "kuzu_weak":
-        rows = model.execute_cypher(_WEAK_CYPHER)
-    else:
-        rows = model.execute_cypher(_STRONG_CYPHER)
-    per_event_min: dict[str, int] = {}
-    per_event_max: dict[str, int] = {}
-    per_event_act: dict[str, str] = {}
-    for eid, activity, pred_us in rows:
-        if eid in per_event_min:
-            if pred_us < per_event_min[eid]:
-                per_event_min[eid] = pred_us
-            if pred_us > per_event_max[eid]:
-                per_event_max[eid] = pred_us
-        else:
-            per_event_min[eid] = pred_us
-            per_event_max[eid] = pred_us
-            per_event_act[eid] = activity
-    totals: dict[str, int] = defaultdict(int)
-    counts: dict[str, int] = defaultdict(int)
-    for eid, act in per_event_act.items():
-        span_s = (per_event_max[eid] - per_event_min[eid]) // 1_000_000
-        totals[act] += span_s
-        counts[act] += 1
-    return [(str(a), totals[a], counts[a]) for a in totals]
+def run(model, _inputs) -> list[tuple[str, int, str]]:
+    cypher = _WEAK if model.name == "kuzu_weak" else _STRONG
+    k = perf_top_k()
+    if k is not None:
+        cypher += f"\nORDER BY sync_us DESC, eid ASC\nLIMIT {k}"
+    rows = model.execute_cypher(cypher)
+    return [(str(eid), int(s), str(o)) for eid, s, o in rows]
 
 
 registry.register_impl("oc_perf_sync", "kuzu", sys.modules[__name__])

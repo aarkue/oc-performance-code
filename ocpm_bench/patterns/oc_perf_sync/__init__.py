@@ -1,13 +1,10 @@
-"""P3 / W1: per-event synchronization time, aggregated per activity.
+"""P3 / Sync: per-event synchronization time and the delaying object.
 
-For each event ``e`` and each related object, take ``e``'s immediate
-directly-follows predecessor on that object. The per-event sync time is the span
-between the earliest and latest of those predecessor timestamps, floored to whole
-seconds. Events without predecessors are skipped.
-
-Output is the set of ``(activity, total_sync_seconds, count)`` triples. The mean
-per activity is ``total_sync_seconds / count``, kept as separate numerator and
-denominator so cross-engine equality stays integer-only.
+For each event, take the events directly preceding it (the immediate predecessor
+on each shared object). The synchronization time is the span between the earliest
+and latest of these predecessors, in integer microseconds. The delaying object is
+the shared object linking the latest predecessor. One row per event that has at
+least one predecessor.
 """
 
 from __future__ import annotations
@@ -19,19 +16,12 @@ from ocpm_bench.patterns.base import OutputSchema, PatternContract
 
 _OUTPUT = OutputSchema(
     kind="tuple_set",
-    columns=["activity", "total_sync_seconds", "count"],
+    columns=["event_id", "sync_us", "delaying_object"],
 )
 
 
 def _instances(_dataset) -> list[tuple[str, Any]]:
-    return [("W1", None)]
-
-
-def _post_process(raw, _inputs, model):
-    if model.name in ("kuzu", "neo4j_strong"):
-        translate = model.original_name
-        return [(translate(act), total, count) for act, total, count in raw]
-    return raw
+    return [("sync", None)]
 
 
 CONTRACT = PatternContract(
@@ -39,7 +29,6 @@ CONTRACT = PatternContract(
     output=_OUTPUT,
     instances=_instances,
     oracle_model="linked_ocel",
-    post_process=_post_process,
 )
 
 registry.register_pattern(CONTRACT)

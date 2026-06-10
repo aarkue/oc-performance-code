@@ -19,7 +19,7 @@ from ocpm_bench.datasets.base import Dataset
 from ocpm_bench.harness import cache as _cache
 from ocpm_bench.harness import registry
 from ocpm_bench.models._versions import package_version, python_version
-from ocpm_bench.models.primitives import clean_type_name, normalize_timestamp
+from ocpm_bench.models.primitives import clean_type_name, normalize_timestamp, thread_cap
 
 
 def _export_typed(src: str, out_path: Path) -> None:
@@ -161,7 +161,7 @@ class KuzuModel:
             payload_name=f"{dataset.name}-strong.kuzu",
             export=lambda out: _export_typed(str(src), out),
         )
-        self._db = kuzu.Database(str(self._path))
+        self._db = kuzu.Database(str(self._path), max_num_threads=thread_cap() or 0)
         self._conn = kuzu.Connection(self._db)
         self._name_map, self._ev_types, self._ob_types = _build_name_info(str(src))
         self._event_labels = _cleaned_labels(self._ev_types)

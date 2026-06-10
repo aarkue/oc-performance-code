@@ -17,27 +17,23 @@ def run(model: PandasModel, inputs: KPIConversionInputs) -> float:
     rel = model.relations
     o2o = model.frames["o2o"]
 
-    sources_mask = objs["ocel:type"] == inputs.source_type
-    total = int(sources_mask.sum())
+    sources = objs.loc[objs["ocel:type"] == inputs.source_type, ["ocel:oid"]]
+    total = len(sources)
     if total == 0:
         return 0.0
-    source_ids = set(objs.loc[sources_mask, "ocel:oid"])
-
-    reached_targets = set(rel.loc[
-        (rel["ocel:activity"] == inputs.activity)
-        & (rel["ocel:type"] == inputs.target_type),
-        "ocel:oid",
-    ])
-    if not reached_targets:
-        return 0.0
-
-    reached_sources = set(
-        o2o.loc[
-            o2o["ocel:oid"].isin(source_ids) & o2o["ocel:oid_2"].isin(reached_targets),
-            "ocel:oid",
+    reached_targets = (
+        rel.loc[
+            (rel["ocel:activity"] == inputs.activity)
+            & (rel["ocel:type"] == inputs.target_type),
+            ["ocel:oid"],
         ]
+        .drop_duplicates()
+        .rename(columns={"ocel:oid": "ocel:oid_2"})
     )
-    return float(len(reached_sources)) / float(total)
+    reached = o2o.merge(sources, on="ocel:oid", how="inner").merge(
+        reached_targets, on="ocel:oid_2", how="inner"
+    )
+    return float(reached["ocel:oid"].nunique()) / float(total)
 
 
 registry.register_impl("kpi_conversion", "pandas", sys.modules[__name__])

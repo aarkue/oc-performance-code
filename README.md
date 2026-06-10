@@ -6,7 +6,7 @@ The benchmark currently covers these access patterns:
 
 - P1 control flow: directly-follows graphs (`dfg`), trace variants (`variants`)
 - P2 queries: OCPQ Q1 to Q7 (`ocpq`), EKG corpus Q1 to Q3 (`ekg`)
-- P3 OC-Perf: per-event synchronization time (`oc_perf_sync`), latest-predecessor counts (`oc_perf_delaying`)
+- P3 OC-Perf: per-event synchronization time + delaying object (`oc_perf_sync`), per-event sojourn time (`oc_perf_sojourn`)
 - P4 BI/KPI: activity x object-type heatmap (`kpi_heatmap`), conversion rate (`kpi_conversion`)
 
 ## Models
@@ -38,8 +38,7 @@ uv venv .venv --python 3.14
 uv pip install -e ".[dev]"
 # r4pm requires a custom build with OCPQ support; the normal PyPI release does not include it.
 # Install the prerelease (with the polars extra) from https://github.com/aarkue/r4pm/releases or use:
-# uv pip install "r4pm[polars]==0.5.5a4"
-# or uv pip install "<path-to-r4pm-wheel>[polars]" if you downloaded a wheel (e.g., from GitHub)
+# uv pip install --prerelease=allow "r4pm[polars]==0.5.5a6"
 ```
 
 Or with the standard library `venv` + `pip` (Python 3.14 must already be installed):
@@ -52,8 +51,7 @@ python -m venv .venv
 #   Windows cmd.exe:    .venv\Scripts\activate.bat
 pip install -e ".[dev]"
 # Same r4pm caveat as above, e.g.:
-# pip install "r4pm[polars]==0.5.5a4"
-# or pip install "<path-to-r4pm-wheel>[polars]"
+# pip install --prerelease=allow "r4pm[polars]==0.5.5a6"
 ```
 
 BPIC17 OCEL source file:
@@ -167,7 +165,7 @@ Common specs:
 | `dfg-{small,paper}.yaml`           | engine-native DFG                              |
 | `variants-{small,paper}.yaml`      | engine-native trace variants                   |
 | `ocpq-{small,paper}.yaml`          | OCPQ Q1 to Q7                                  |
-| `perf-{small,paper}.yaml`          | OC-Perf W1 (sync) + W2 (delaying)              |
+| `perf-{small,paper}.yaml`          | OC-Perf Sync + Sojourn                         |
 | `kpi-{small,paper}.yaml`           | KPI K1 (heatmap) + K2 (conversion)             |
 | `dfg_prim-{small,paper}.yaml`      | DFG via shared `PrimitiveAccess`               |
 | `variants_prim-{small,paper}.yaml` | trace variants via shared `PrimitiveAccess`    |
@@ -414,22 +412,25 @@ The script writes PNG and PDF files next to the input JSONL.
 ## Regenerating the paper tables
 
 `scripts/make_table.py` consumes one or more JSONL files (rows filtered by
-their `pattern` field) and writes the main results table plus an optional
-typing sub-study table.
+their `pattern` field) and writes the main results table plus two optional
+typing sub-study tables.
 
 ```bash
 python scripts/make_table.py \
     --input results/paper-all.jsonl \
     --output ../paper-overleaf/tables/main.tex \
-    --typing-output ../paper-overleaf/tables/typing.tex
+    --typing-output ../paper-overleaf/tables/typing.tex \
+    --typing-rels-output ../paper-overleaf/tables/typing_rels.tex
 ```
 
 Flags:
 
 - `--input <jsonl> [<jsonl> ...]` -- one or more JSONLs; rows are combined.
 - `--output <path>` -- main table.
-- `--typing-output <path>` -- typing sub-study table (weak vs. strong schemas,
-  with the speedup factor). Same input file as the main table.
+- `--typing-output <path>` -- node-typing table: weak -> default schema
+  (typed entity tables), speedup factor per corpus. SQLite, DuckDB, Kuzu.
+- `--typing-rels-output <path>` -- edge-typing table: default -> strong_rels
+  schema (per-pair relation tables). SQLite and DuckDB only.
 - `--inner-stat {mean,median}` -- within-cell aggregation (default `mean`).
 - `--on-incorrect {drop,include,error}` -- handling of `correct=False` rows.
 - `--no-color`, `--no-bold` -- disable column tinting / winner bold.

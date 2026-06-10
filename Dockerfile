@@ -14,19 +14,19 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # System Chrome for kaleido v1 (used by scripts/plot_results.py for PNG/PDF
-# export). Without it plot export fails with ChromeNotFoundError.
+# export).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends chromium \
  && rm -rf /var/lib/apt/lists/*
 
 # Layer 1: dependency install (cacheable; only re-runs when pyproject/uv.lock change).
-# r4pm 0.5.5a4 is the published prerelease (OCPQ microsecond fix); installed from
-# the index so the image matches the native dev env.
+# r4pm 0.5.5a6 published prerelease (OCPQ, OPT-1 JSON-bytes FFI, per-event top_k);
+# installed from the index so the image matches the SIF and native dev env.
 COPY pyproject.toml uv.lock ./
 COPY ocpm_bench ./ocpm_bench
 RUN uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.14 \
  && uv pip install -e ".[dev]" \
- && uv pip install --prerelease=allow "r4pm[polars]==0.5.5a4"
+ && uv pip install --prerelease=allow "r4pm[polars]==0.5.5a6"
 
 # Layer 2: project assets (changes more often, kept separate from heavy install layer).
 COPY configs ./configs
