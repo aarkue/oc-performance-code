@@ -21,12 +21,10 @@ cache/
 run/
 
 # Benchmark results (large, per-machine)
-results/*.jsonl
-results/*.jsonl-old
-results/*.png
-results/*.pdf
-results/*.log
-results/oracles/
+results/*
+!results/paper-all.jsonl
+!results/tables/
+!results/tables/**
 
 # Local r4pm prerelease wheels (installed from the index in containers)
 wheels/

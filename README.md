@@ -63,6 +63,15 @@ BPIC17 OCEL source file:
 The OCPQ Q1 to Q7 query files used by the benchmark are bundled under
 `ocpm_bench/patterns/ocpq/corpus/`.
 
+## Paper results
+
+The measurements and generated tables used for the paper are included:
+
+- `results/paper-all.jsonl`: raw per-instance measurements
+- `results/tables/main.{tex,pdf}`: main runtime table
+- `results/tables/typing.{tex,pdf}`: entity-typing table
+- `results/tables/typing_rels.{tex,pdf}`: relation-typing table
+
 ## Setup with Docker
 
 A `Dockerfile` and `docker-compose.yml` are provided as an alternative to the
@@ -418,9 +427,11 @@ typing sub-study tables.
 ```bash
 python scripts/make_table.py \
     --input results/paper-all.jsonl \
-    --output ../paper-overleaf/tables/main.tex \
-    --typing-output ../paper-overleaf/tables/typing.tex \
-    --typing-rels-output ../paper-overleaf/tables/typing_rels.tex
+    --output results/tables/main.tex \
+    --typing-output results/tables/typing.tex \
+    --typing-rels-output results/tables/typing_rels.tex
+
+scripts/make_table_pdfs.sh
 ```
 
 Flags:

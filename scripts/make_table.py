@@ -226,16 +226,9 @@ def build_table(
             r"\textcolor{red}{\textbf{Draft:}} " + draft_note + " "
         )
     caption_parts.append(
-        r"Mean wall-clock time (ms) on BPIC17 per model and access pattern. "
-        r"Warm runs only, cold excluded. Cells in each column's fastest band "
-        r"are in bold. Cells are "
-        r"shaded by order-of-magnitude band, darker = faster: under 10\,ms, "
-        r"under 100\,ms, under 1\,s, and at or above 1\,s. \texttt{SQLite}, "
-        r"\texttt{DuckDB}, and \texttt{Kuzu} use the default schema (typed "
-        r"entity tables, generic relation tables). "
-        r"\autoref{tab:typing-results} and \autoref{tab:typing-rels-results} "
-        r"report the schema-typing speedups. "
-        r"The 10 warm runs per cell vary by about 5\% (median across cells)."
+        r"Mean warm runtime (ms) on BPIC2017 per engine and access pattern. "
+        r"Darker cells indicate faster order-of-magnitude bands; bold marks "
+        r"the fastest band in each column."
     )
 
     lines = [
@@ -292,22 +285,17 @@ def _speedup_tint(speedup: float) -> tuple[str, int]:
 
 
 NODE_TYPING_CAPTION = (
-    r"Speedup of typed entity tables (default schema) over the weak schema "
-    r"on BPIC17 ($\text{weak ms}/\text{default ms}$): $>1.0$ favours typed "
-    r"entity tables (teal) and $<1.0$ the weak schema (red). Bold marks "
-    r"effects $\geq$20\%. Per-corpus speedup is the geometric mean over its "
-    r"patterns; -- marks corpora where the weak schema exceeded the time "
-    r"budget. \autoref{tab:main-results} reports the default variant."
+    r"Geometric-mean runtime ratio of weak and typed entity tables on "
+    r"BPIC2017. Teal favours typed tables, red favours the weak schema, "
+    r"and bold marks substantial differences. Dashes denote unavailable "
+    r"comparisons."
 )
 
 EDGE_TYPING_CAPTION = (
-    r"Speedup of per-pair relation tables (strong-rels schema) over the "
-    r"default schema's generic relation tables on BPIC17 "
-    r"($\text{default ms}/\text{strong-rels ms}$): $>1.0$ favours per-pair "
-    r"tables (teal) and $<1.0$ generic tables (red). Bold marks effects "
-    r"$\geq$20\%. Per-corpus speedup is the geometric mean over its "
-    r"patterns. Both variants use typed entity tables; \texttt{Kuzu} has "
-    r"no per-pair variant."
+    r"Geometric-mean runtime ratio of generic and per-pair relation tables "
+    r"on BPIC2017. Teal favours per-pair tables, red favours generic tables, "
+    r"and bold marks substantial differences. Dashes denote unavailable "
+    r"comparisons."
 )
 
 

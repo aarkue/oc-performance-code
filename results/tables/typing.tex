@@ -1,0 +1,16 @@
+\begin{table}[t]
+\caption{Geometric-mean runtime ratio of weak and typed entity tables on BPIC2017. Teal favours typed tables, red favours the weak schema, and bold marks substantial differences. Dashes denote unavailable comparisons.}\label{tab:typing-results}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrrrrrr@{}}
+\toprule
+Engine & DFG & Variants & OCPQ & EKG & Sync & Sojourn & K1 & K2 \\
+\midrule
+SQLite & \cellcolor{red!44}\textbf{0.18$\times$} & \cellcolor{red!7}\textbf{0.78$\times$} & \multicolumn{1}{c}{--} & \multicolumn{1}{c}{--} & \cellcolor{red!41}\textbf{0.21$\times$} & \cellcolor{red!51}\textbf{0.14$\times$} & 1.01$\times$ & \cellcolor{teal!2}1.06$\times$ \\
+DuckDB & \cellcolor{teal!9}\textbf{1.42$\times$} & \cellcolor{teal!8}\textbf{1.37$\times$} & \cellcolor{teal!4}1.17$\times$ & \cellcolor{teal!4}1.17$\times$ & \cellcolor{red!1}0.94$\times$ & \cellcolor{teal!2}1.06$\times$ & 1.00$\times$ & \cellcolor{red!1}0.97$\times$ \\
+Kuzu & \cellcolor{red!26}\textbf{0.37$\times$} & \cellcolor{teal!2}1.07$\times$ & \cellcolor{teal!29}\textbf{3.06$\times$} & \cellcolor{teal!17}\textbf{1.93$\times$} & \cellcolor{red!15}\textbf{0.57$\times$} & \cellcolor{red!16}\textbf{0.54$\times$} & \cellcolor{red!25}\textbf{0.39$\times$} & \cellcolor{teal!32}\textbf{3.38$\times$} \\
+\bottomrule
+\end{tabular*}
+\end{table}
