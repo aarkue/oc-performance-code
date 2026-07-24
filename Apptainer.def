@@ -1,7 +1,7 @@
 Bootstrap: docker
-From: neo4j:5
+From: neo4j:5.26.27
 
-# All-in-one image: Neo4j 5 + Python 3.14 + ocpm-bench (incl. r4pm with OCPQ).
+# All-in-one image: Neo4j 5.26.27 + Python 3.14.5 + ocpm-bench (incl. r4pm with OCPQ).
 #
 # Build (local, no root):
 #   apptainer build --fakeroot ocpm-bench.sif Apptainer.def
@@ -37,9 +37,9 @@ From: neo4j:5
     curl -LsSf https://astral.sh/uv/install.sh | sh
     mv /root/.local/bin/uv /usr/local/bin/uv
 
-    # Project venv (uv handles fetching Python 3.14).
+    # Project venv on managed CPython 3.14.5 (bundled SQLite 3.53.1)
     cd /app
-    uv venv /opt/venv --python 3.14
+    uv venv /opt/venv --python 3.14.5 --python-preference only-managed
     . /opt/venv/bin/activate
     uv pip install -e ".[dev]"
     # r4pm 0.5.5a6 published prerelease (OCPQ, OPT-1 JSON-bytes FFI, per-event top_k),

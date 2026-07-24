@@ -98,8 +98,6 @@ def run(
 def matrix(spec: Path, do_prepare: bool) -> None:
     """Run every cell in SPEC, one subprocess per cell, in randomized order."""
     cfg = yaml.safe_load(spec.read_text())
-    if do_prepare:
-        _prepare_pairs(list(cfg["cells"]))
     out_path = Path(cfg["results_path"])
     repetitions = int(cfg.get("repetitions", 10))
     passes = int(cfg.get("matrix_passes", 2))
@@ -108,6 +106,9 @@ def matrix(spec: Path, do_prepare: bool) -> None:
     default_timeout = cfg.get("cell_timeout_seconds")
     default_timeout = float(default_timeout) if default_timeout is not None else None
     allow_incorrect = bool(cfg.get("allow_incorrect", False))
+
+    if do_prepare:
+        _prepare_pairs(list(cells))
 
     if out_path.exists():
         out_path.unlink()

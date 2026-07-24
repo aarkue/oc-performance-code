@@ -60,6 +60,20 @@ BPIC17 OCEL source file:
 - loaded directly from the gzip; no manual decompression needed
 - override with `OCPM_BPIC17_PATH=/path/to/file.json[.gz]` to point at a different copy
 
+### Dataset provenance
+
+The measured file is derived from the OCEL 1.0 `.jsonocel` by Khayatbashi, Hartig
+and Jalali, "BPI Challenge 2017 (OCEL)", 4TU.ResearchData (2023),
+https://data.4tu.nl/datasets/6889ca3f-97cf-459a-b630-3b0b0d8664b5 (itself derived
+from the BPIC17 event knowledge graph). Two scripts reproduce it:
+
+```bash
+# OCEL 1.0 -> OCEL 2.0, adding object-to-object relations
+python scripts/convert_ocel1_to_ocel2.py BPIC17.jsonocel bpic2017-ocel2.json
+# break tied timestamps to make each event timestamp unique
+python scripts/canonicalize.py bpic2017-ocel2.json data/bpic17/bpic2017-ocel2.canonical.json
+```
+
 The OCPQ Q1 to Q7 query files used by the benchmark are bundled under
 `ocpm_bench/patterns/ocpq/corpus/`.
 

@@ -113,7 +113,8 @@ def _load_combined(
                     if on_incorrect == "drop":
                         dropped.append(key)
                         continue
-                by_cell[(model, pattern, inst)].extend(warm)
+                cell = (model, pattern, inst)
+                by_cell[cell].extend(warm)
 
     for key in dropped:
         print(f"warning: dropped incorrect cell {key[0]}/{key[1]}/{key[2]}",

@@ -8,14 +8,14 @@ requires-python = ">=3.14"
 dependencies = [
     "click>=8.1",
     "pyyaml>=6.0",
-    "polars>=1.0",
-    "pandas>=2.0",
+    "polars==1.41.2",
+    "pandas==3.0.3",
     # PandasModel goes through polars.DataFrame.to_pandas(), which
     # requires pyarrow at runtime.
     "pyarrow>=15",
-    "duckdb>=1.0",
-    "kuzu>=0.6",
-    "neo4j>=5.0",
+    "duckdb==1.5.3",
+    "kuzu==0.11.3",
+    "neo4j==6.2.0",
     # r4pm needs the OCPQ-enabled prerelease 0.5.5a6 (published on PyPI):
     #     uv pip install --prerelease=allow "r4pm[polars]==0.5.5a6"
     #   Kept out of `dependencies` because the wheel is pinned to the

@@ -47,5 +47,14 @@ Thumbs.db
 .env
 .env.local
 
-
+# Container image artifacts
 *.sif
+*.tar.gz
+!data/**/*.tar.gz
+
+# JVM crash dumps and stray logs
+*.log
+hs_err_pid*.log
+
+# Stray result dumps at repo root (canonical results live in results/)
+/paper-all_*.jsonl

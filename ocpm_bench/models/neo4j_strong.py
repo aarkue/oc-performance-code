@@ -168,6 +168,37 @@ class Neo4jModelStrong:
 
         if self._needs_load():
             self._wipe_and_load(csv_dir)
+        self._ensure_indexes()
+
+    def _ensure_indexes(self) -> None:
+        """Assert the id and time range indexes on every setup and await them.
+
+        `id` (every event and object label) is the primary lookup key for all
+        traversals; `time` (event labels) backs timestamp filters and ordering.
+        Both are asserted here, not only during load, so a run against a
+        persisted store is never left without them.
+        """
+        for t in list(self._ev_types) + list(self._ob_types):
+            self._run_write(_q_create_index(clean_type_name(t), "id"))
+        want_index = os.environ.get("OCPM_NEO4J_TIME_INDEX", "1") != "0"
+        for ev_type in self._ev_types:
+            label = clean_type_name(ev_type)
+            if want_index:
+                self._run_write(_q_create_index(label, "time"))
+            else:
+                self._run_write(f"DROP INDEX {label}_time IF EXISTS")
+        # Experiment toggle (default off): relationship-property index on the DF
+        # edge type, to measure its effect on DFG
+        if os.environ.get("OCPM_NEO4J_DF_INDEX", "0") != "0":
+            self._run_write(
+                "CREATE INDEX df_entitytype IF NOT EXISTS "
+                "FOR ()-[r:DF]-() ON (r.EntityType)"
+            )
+        else:
+            self._run_write("DROP INDEX df_entitytype IF EXISTS")
+        # Index population is async; without this the timed runs could execute
+        # against a partially built index.
+        self._run_write("CALL db.awaitIndexes(1800)")
 
     def _needs_load(self) -> bool:
         try:
@@ -202,12 +233,40 @@ class Neo4jModelStrong:
         except Exception:
             pass
 
+    def memory_settings(self) -> dict[str, str]:
+        """Effective heap and page cache of the live server.
+
+        Neo4j's page cache defaults to a flat 512 MiB regardless of available
+        RAM, which is below the BPIC17 store size, so the effective values are
+        recorded with every run rather than assumed.
+        """
+        settings: dict[str, str] = {}
+        try:
+            rows = self.execute_cypher(
+                "SHOW SETTINGS YIELD name, value "
+                "WHERE name IN ['server.memory.heap.max_size', "
+                "'server.memory.pagecache.size'] RETURN name, value"
+            )
+            settings = {name: str(value) for name, value in rows}
+        except Exception:
+            pass
+        try:
+            rows = self.execute_cypher(
+                'CALL dbms.queryJmx("java.lang:type=Memory") YIELD attributes '
+                'RETURN attributes.HeapMemoryUsage.value.properties.max'
+            )
+            settings["jvm.heap.max_bytes"] = str(rows[0][0])
+        except Exception:
+            pass
+        return settings
+
     def library_versions(self) -> dict[str, str]:
         versions = {
             "neo4j": package_version("neo4j"),
             "r4pm": package_version("r4pm"),
             "python": python_version(),
         }
+        versions.update(self.memory_settings())
         try:
             rows = self.execute_cypher(
                 "CALL dbms.components() YIELD name, versions "

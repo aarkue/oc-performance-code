@@ -1,0 +1,20 @@
+# Neo4j column only, with the fair config (16G heap + 16G page cache via
+# run-apptainer.sh, timestamp index in the model code). Its rows are merged into
+# results/paper-all.jsonl in place of the submitted Neo4j rows; the other six
+# engines are unaffected by the Neo4j fix.
+
+repetitions: 10
+matrix_passes: 1
+randomize_cell_order: true
+cell_timeout_seconds: 3600
+results_path: results/neo4j-cluster.jsonl
+
+cells:
+  - { model: neo4j_strong, pattern: dfg,              dataset: bpic17 }
+  - { model: neo4j_strong, pattern: variants,         dataset: bpic17 }
+  - { model: neo4j_strong, pattern: ocpq,             dataset: bpic17 }
+  - { model: neo4j_strong, pattern: ekg,              dataset: bpic17 }
+  - { model: neo4j_strong, pattern: oc_perf_sync,     dataset: bpic17 }
+  - { model: neo4j_strong, pattern: oc_perf_sojourn,  dataset: bpic17 }
+  - { model: neo4j_strong, pattern: kpi_heatmap,      dataset: bpic17 }
+  - { model: neo4j_strong, pattern: kpi_conversion,   dataset: bpic17 }

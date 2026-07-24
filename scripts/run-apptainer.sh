@@ -25,9 +25,7 @@ JOB_TAG="${SLURM_JOB_ID:-$(date +%s)}"
 OUT_DIR="$PROJECT_DIR/results-$JOB_TAG"
 RUN_DIR="/tmp/run-$JOB_TAG"
 
-# Per-job private cache: DuckDB/Kuzu take exclusive file locks, so concurrent
-# jobs sharing CACHE_DIR collide. Each job gets its own copy on /tmp; new
-# payloads sync back under flock for later jobs.
+# Per-job private cache on /tmp: DuckDB/Kuzu take exclusive file locks, so jobs sharing CACHE_DIR collide.
 JOB_CACHE="$RUN_DIR/cache"
 
 [[ -f "$SIF" ]] || { echo "SIF not found: $SIF" >&2; exit 2; }
@@ -52,6 +50,7 @@ trap '_sync_results; _sync_cache_back' EXIT
 
 {
   echo "host=$(hostname) job=$JOB_TAG config=$CONFIG threads=$N_THREADS"
+  echo "OCPM_NEO4J_DF_INDEX=${OCPM_NEO4J_DF_INDEX:-0}"
   echo "sif=$SIF sha256=$(sha256sum "$SIF" | cut -d' ' -f1)"
   lscpu | grep -E "Model name|Socket|Core|MHz|NUMA"
   numactl --hardware | head -10
@@ -59,11 +58,8 @@ trap '_sync_results; _sync_cache_back' EXIT
   uname -a
 } > "$OUT_DIR/env.txt"
 
-# CPU + NUMA pinning. Two regimes:
-#  * Exclusive node (paper-grade): cgroup has all cores; slice to the
-#    first N_THREADS cores (NUMA node 0) and bind memory to node 0.
-#  * Shared node (--cpus-per-task=N): cgroup already capped; use whichever
-#    cores SLURM assigned and let memory bind locally.
+# CPU/NUMA pinning: on an exclusive node slice to the first N_THREADS cores of
+# NUMA node 0; on a shared node (--cpus-per-task) use the cores SLURM assigned.
 ALLOWED_CPUS=$(awk '/Cpus_allowed_list:/{print $2}' /proc/self/status)
 N_ALLOWED=$(awk -F, '{n=0; for(i=1;i<=NF;i++){split($i,a,"-"); n+=(length(a)==2 ? a[2]-a[1]+1 : 1)} print n}' <<< "$ALLOWED_CPUS")
 if (( N_ALLOWED > N_THREADS )); then
@@ -78,7 +74,10 @@ echo "[run-apptainer] pinning cpus=$TASKSET_CPUS numa=${NUMA_FLAGS[*]}"
 taskset -c "$TASKSET_CPUS" \
   numactl "${NUMA_FLAGS[@]}" \
   apptainer run --cleanenv --writable-tmpfs \
-    --env NEO4J_server_memory_heap_max__size="${NEO4J_HEAP:-8G}" \
+    --env NEO4J_server_memory_heap_max__size="${NEO4J_HEAP:-16G}" \
+    --env NEO4J_server_memory_pagecache_size="${NEO4J_PAGECACHE:-16G}" \
+    `# time index always on (model default); DF index off unless testing` \
+    --env OCPM_NEO4J_DF_INDEX="${OCPM_NEO4J_DF_INDEX:-0}" \
     --env OCPM_THREADS="$N_THREADS" \
     --env RAYON_NUM_THREADS="$N_THREADS" \
     --env POLARS_MAX_THREADS="$N_THREADS" \

@@ -2,13 +2,16 @@
 
 services:
   neo4j:
-    image: neo4j:5
+    image: neo4j:5.26.27
     environment:
       # 8+ char password is required by Neo4j 5; keep in sync with the
       # OCPM_NEO4J_PASSWORD env on bench/dev.
       NEO4J_AUTH: neo4j/testpassword
       # Bench imports BPIC17 via LOAD CSV; raise heap if you hit GC stalls.
-      NEO4J_server_memory_heap_max__size: 4G
+      NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP:-8G}
+      # Neo4j's default page cache is 512M regardless of RAM.
+      # Default to 8G so the store fits in cache on every launch path.
+      NEO4J_server_memory_pagecache_size: ${NEO4J_PAGECACHE:-8G}
     volumes:
       - neo4j-data:/data
       - neo4j-import:/var/lib/neo4j/import

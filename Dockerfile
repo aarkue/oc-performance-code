@@ -1,8 +1,6 @@
 # Minimal benchmark image for ocpm-bench.
-#
-# Base: official uv image on python 3.14 (matches .python-version and the
-# cpython-314 ABI required by the r4pm wheel).
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+# Base pinned by digest: uv python3.14-bookworm-slim; venv uses managed CPython 3.14.5 (SQLite 3.53.1).
+FROM ghcr.io/astral-sh/uv@sha256:7cf77f594be8042dab6daa9fe326f90962252268b4f120a7f5dccce4d947e6c1
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -13,29 +11,26 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# System Chrome for kaleido v1 (used by scripts/plot_results.py for PNG/PDF
-# export).
+# Chromium: kaleido PNG/PDF export in scripts/plot_results.py.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends chromium \
  && rm -rf /var/lib/apt/lists/*
 
-# Layer 1: dependency install (cacheable; only re-runs when pyproject/uv.lock change).
-# r4pm 0.5.5a6 published prerelease (OCPQ, OPT-1 JSON-bytes FFI, per-event top_k);
-# installed from the index so the image matches the SIF and native dev env.
+# Dependencies (cached until pyproject/uv.lock change)
 COPY pyproject.toml uv.lock ./
 COPY ocpm_bench ./ocpm_bench
-RUN uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.14 \
+RUN uv python install 3.14.5 \
+ && uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.14.5 --python-preference only-managed \
  && uv pip install -e ".[dev]" \
  && uv pip install --prerelease=allow "r4pm[polars]==0.5.5a6"
 
-# Layer 2: project assets (changes more often, kept separate from heavy install layer).
+# Project assets (change more often than the install layer).
 COPY configs ./configs
 COPY scripts ./scripts
 COPY data ./data
 COPY README.md ./
 
-# Results and cache directories live as volumes; create them so a fresh
-# container without bind-mounts still works.
+# Results/cache mount as volumes; create so a bind-mount-less run still works.
 RUN mkdir -p /app/results /app/cache
 VOLUME ["/app/results", "/app/cache"]
 

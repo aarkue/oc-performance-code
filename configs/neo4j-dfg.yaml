@@ -1,0 +1,13 @@
+# Neo4j DFG only, for A/B testing the DF edge-property index effect:
+#   OCPM_NEO4J_DF_INDEX=0 sbatch ... run-apptainer.sh neo4j-dfg.yaml   # baseline
+#   OCPM_NEO4J_DF_INDEX=1 sbatch ... run-apptainer.sh neo4j-dfg.yaml   # with DF index
+# Compare the dfg means; the indexed/baseline ratio is the disclosed magnitude.
+
+repetitions: 10
+matrix_passes: 1
+randomize_cell_order: true
+cell_timeout_seconds: 3600
+results_path: results/neo4j-dfg.jsonl
+
+cells:
+  - { model: neo4j_strong, pattern: dfg, dataset: bpic17 }

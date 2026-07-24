@@ -1,5 +1,14 @@
 # Misc Experiments
 
+## Alternative Workload Formulations
+See [formulations.md](./formulations.md) for the engine-workload formulations
+that were tried and discarded in favor of the ones the benchmark reports.
+
+## Neo4j: Directly-Follows Index
+See [neo4j_df_index.md](./neo4j_df_index.md) for the effect of a
+relationship-property index on the materialized directly-follows edge
+(speeds `DFG` by over 3x, omitted for parity with Kuzu and the reference EKG).
+
 ## Kuzu: Disk vs. In-Memory
 See [kuzu_mem_vs_disk.py](./kuzu_mem_vs_disk.py) for the code.
 
