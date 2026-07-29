@@ -86,6 +86,13 @@ The measurements and generated tables used for the paper are included:
 - `results/tables/typing.{tex,pdf}`: entity-typing table
 - `results/tables/typing_rels.{tex,pdf}`: relation-typing table
 
+## Alternative formulations and side experiments
+
+The benchmark reports one implementation per engine-workload pair, the fastest
+formulation we arrived at.
+Alternatives that were tested are documented in
+[`misc-experiments/`](misc-experiments/README.md).
+
 ## Setup with Docker
 
 A `Dockerfile` and `docker-compose.yml` are provided as an alternative to the
